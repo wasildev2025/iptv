@@ -1,0 +1,434 @@
+IBOSOL Dashboard — Full Product Teardown & Replication Plan
+1. Features & Modules
+Based on my research, ibosol.com/dashboard is a B2B IPTV App Activation Reseller Panel with these core modules:
+
+A. Dashboard (Home)
+Credit balance display (top-right)
+Live stats: active users, total activations, recent activity
+Account stats: expiring licenses, top apps in use
+Announcements/notifications from admin
+B. User/Device Management
+Add device by MAC address (WiFi + Ethernet MACs per device)
+Activate app license on a device (select app → enter MAC → deduct credits)
+Renew existing device license (extend expiration)
+Edit device details (notes, playlist URL, etc.)
+Disable/enable device
+List all devices with search, filter, pagination
+View device status (active, expired, trial)
+C. Credit System
+View credit balance
+Purchase credits (tiered pricing: 10, 20, 50, 100, 500, 1000+ credits)
+Credit history/log (all transactions)
+Credit transfer (to sub-resellers)
+D. App Management
+20+ supported apps: IBO Player, BOB Player, Virginia Player, ABE Player, Duplex, FlixNet, IBO STB, King 4K, Family 4K, Hush Play, CR7 Player, Smart One Pro, etc.
+Per-app activation (1 credit = 1 year OR lifetime depending on package)
+Silver package (1 year) vs Golden package (lifetime)
+E. Sub-Reseller Management
+Create sub-reseller accounts
+Assign credits to sub-resellers
+Set profit margins (markup percentages)
+Monitor sub-reseller activity
+Custom DNS/branding per sub-reseller
+F. Activity & Logs
+Activity log: all actions with timestamps
+Credit log: all credit transactions
+Login log: access history with IPs
+G. Support / Tickets
+WhatsApp integration for support
+Contact form / ticket system
+H. Profile & Settings
+Edit profile (name, email, password)
+Language selector (EN, PT, ES, FR, NL)
+Notification preferences
+2. User Flows
+Flow 1: Reseller Registration & Login
+
+Visit site → Register (email, name, password) → Email verification →
+Login → Redirect to /dashboard
+Flow 2: Buy Credits
+
+Dashboard → Credits page → Select package (e.g., 50 credits) →
+Payment (Stripe/PayPal/WooCommerce) → Credits added to balance →
+Credit log entry created
+Flow 3: Activate a Device
+
+Dashboard → "Add User/Device" → Select App (e.g., IBO Player) →
+Enter MAC address → Select package (1yr/lifetime) →
+Confirm (deducts credits) → Device activated → Success notification
+Flow 4: Renew a Device
+
+Dashboard → Device List → Find device → Click "Renew" →
+Select duration → Confirm (deducts credits) → Expiration extended
+Flow 5: Manage Sub-Resellers
+
+Dashboard → Sub-Resellers → "Add Sub-Reseller" → Set credentials →
+Set profit margin → Assign credits → Sub-reseller can now log in
+and activate devices using their allocated credits
+Flow 6: View Logs
+
+Dashboard → Logs → Filter by type (activity/credit/login) →
+View timestamped entries with details
+3. Frontend Structure
+Pages
+
+/                        → Landing page (marketing)
+/login                   → Login form
+/register                → Registration form
+/forgot-password         → Password reset
+/dashboard               → Main dashboard (stats, balance, announcements)
+/dashboard/devices       → Device list (table with search/filter)
+/dashboard/devices/add   → Add/activate new device
+/dashboard/devices/:id   → Device detail (edit, renew, disable)
+/dashboard/credits       → Credit balance + purchase packages
+/dashboard/credits/history → Credit transaction log
+/dashboard/resellers     → Sub-reseller list
+/dashboard/resellers/add → Add sub-reseller
+/dashboard/resellers/:id → Sub-reseller detail
+/dashboard/logs          → Activity, credit, login logs
+/dashboard/profile       → Profile settings
+/dashboard/support       → Support/contact
+Component Tree
+
+App
+├── LandingPage
+├── AuthLayout
+│   ├── LoginForm
+│   ├── RegisterForm
+│   └── ForgotPasswordForm
+├── DashboardLayout
+│   ├── Sidebar (nav links, credit balance)
+│   ├── TopBar (user menu, notifications, language selector)
+│   ├── DashboardHome
+│   │   ├── StatsCards (total devices, active, expired, credits)
+│   │   ├── RecentActivityWidget
+│   │   └── AnnouncementsBanner
+│   ├── DevicesPage
+│   │   ├── DeviceTable (sortable, filterable, paginated)
+│   │   ├── DeviceFilters (app, status, date range)
+│   │   └── AddDeviceModal / AddDevicePage
+│   │       ├── AppSelector (grid of 20+ apps)
+│   │       ├── MacAddressInput
+│   │       └── PackageSelector (yearly/lifetime)
+│   ├── CreditsPage
+│   │   ├── CreditBalance
+│   │   ├── CreditPackageGrid
+│   │   └── CreditHistoryTable
+│   ├── ResellersPage
+│   │   ├── ResellerTable
+│   │   ├── AddResellerForm
+│   │   └── CreditTransferModal
+│   ├── LogsPage
+│   │   ├── LogTabs (activity, credit, login)
+│   │   └── LogTable
+│   └── ProfilePage
+│       ├── ProfileForm
+│       └── PasswordChangeForm
+└── SharedComponents
+    ├── DataTable (reusable)
+    ├── Modal
+    ├── StatsCard
+    ├── Badge (status indicators)
+    ├── CreditBadge
+    └── LanguageSwitcher
+4. Backend Architecture
+API Endpoints
+
+# Auth
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+POST   /api/auth/forgot-password
+POST   /api/auth/reset-password
+GET    /api/auth/me
+
+# Dashboard
+GET    /api/dashboard/stats          (total devices, active, expired, credits)
+GET    /api/dashboard/announcements
+
+# Devices
+GET    /api/devices                  (list, paginated, filterable)
+POST   /api/devices                  (activate new device)
+GET    /api/devices/:id
+PUT    /api/devices/:id              (edit)
+POST   /api/devices/:id/renew        (renew/extend)
+POST   /api/devices/:id/disable
+POST   /api/devices/:id/enable
+DELETE /api/devices/:id
+
+# Credits
+GET    /api/credits/balance
+GET    /api/credits/packages         (available purchase tiers)
+POST   /api/credits/purchase         (buy credits)
+GET    /api/credits/history          (transaction log)
+POST   /api/credits/transfer         (to sub-reseller)
+
+# Apps
+GET    /api/apps                     (list supported apps)
+
+# Sub-Resellers
+GET    /api/resellers
+POST   /api/resellers
+GET    /api/resellers/:id
+PUT    /api/resellers/:id
+POST   /api/resellers/:id/credits    (add credits)
+DELETE /api/resellers/:id
+
+# Logs
+GET    /api/logs/activity
+GET    /api/logs/credits
+GET    /api/logs/logins
+
+# Profile
+GET    /api/profile
+PUT    /api/profile
+PUT    /api/profile/password
+
+# Admin (super-admin only)
+GET    /api/admin/users
+POST   /api/admin/announcements
+PUT    /api/admin/apps
+GET    /api/admin/stats              (global platform stats)
+Services Layer
+
+AuthService        → registration, login, JWT tokens, password reset
+DeviceService      → MAC validation, activation via app APIs, renewal logic
+CreditService      → balance management, purchase, transfer, deduction (transactional)
+ResellerService    → sub-reseller CRUD, credit allocation, margin calculation
+AppService         → app registry, activation endpoint per app
+LogService         → activity/credit/login logging
+PaymentService     → Stripe/PayPal integration for credit purchases
+NotificationService → email (verification, receipts), WhatsApp webhook
+5. Database Design
+
+-- Users (resellers and sub-resellers)
+users
+├── id              UUID PK
+├── email           VARCHAR UNIQUE
+├── password_hash   VARCHAR
+├── name            VARCHAR
+├── role            ENUM('admin','reseller','sub_reseller')
+├── parent_id       UUID FK(users.id) NULL  -- for sub-resellers
+├── profit_margin   DECIMAL DEFAULT 0       -- markup % for sub-resellers
+├── credit_balance  DECIMAL DEFAULT 0
+├── language        VARCHAR DEFAULT 'en'
+├── is_active       BOOLEAN DEFAULT true
+├── email_verified  BOOLEAN DEFAULT false
+├── created_at      TIMESTAMP
+├── updated_at      TIMESTAMP
+
+-- Devices (activated app licenses)
+devices
+├── id              UUID PK
+├── user_id         UUID FK(users.id)       -- which reseller owns this
+├── app_id          UUID FK(apps.id)
+├── mac_address     VARCHAR                 -- primary MAC
+├── mac_address_alt VARCHAR NULL            -- secondary MAC (WiFi/Ethernet)
+├── package_type    ENUM('yearly','lifetime')
+├── status          ENUM('active','expired','disabled','trial')
+├── activated_at    TIMESTAMP
+├── expires_at      TIMESTAMP NULL          -- NULL for lifetime
+├── notes           TEXT NULL
+├── playlist_url    TEXT NULL
+├── created_at      TIMESTAMP
+├── updated_at      TIMESTAMP
+
+-- Apps (supported IPTV applications)
+apps
+├── id              UUID PK
+├── name            VARCHAR
+├── slug            VARCHAR UNIQUE
+├── icon_url        VARCHAR
+├── credits_yearly  INTEGER DEFAULT 1       -- credits for 1yr activation
+├── credits_lifetime INTEGER DEFAULT 2      -- credits for lifetime
+├── is_active       BOOLEAN DEFAULT true
+├── created_at      TIMESTAMP
+
+-- Credit Packages (purchasable tiers)
+credit_packages
+├── id              UUID PK
+├── credits         INTEGER                 -- e.g., 50
+├── price_usd       DECIMAL
+├── price_brl       DECIMAL
+├── is_active       BOOLEAN DEFAULT true
+
+-- Credit Transactions
+credit_transactions
+├── id              UUID PK
+├── user_id         UUID FK(users.id)
+├── type            ENUM('purchase','activation','renewal','transfer_in','transfer_out','admin_adjustment')
+├── amount          DECIMAL                 -- positive=credit, negative=debit
+├── balance_after   DECIMAL
+├── reference_id    UUID NULL               -- device_id or target user_id
+├── description     TEXT
+├── created_at      TIMESTAMP
+
+-- Activity Logs
+activity_logs
+├── id              UUID PK
+├── user_id         UUID FK(users.id)
+├── action          VARCHAR                 -- 'device.activate', 'device.renew', etc.
+├── details         JSONB
+├── ip_address      VARCHAR
+├── created_at      TIMESTAMP
+
+-- Login Logs
+login_logs
+├── id              UUID PK
+├── user_id         UUID FK(users.id)
+├── ip_address      VARCHAR
+├── user_agent      TEXT
+├── success         BOOLEAN
+├── created_at      TIMESTAMP
+
+-- Announcements
+announcements
+├── id              UUID PK
+├── title           VARCHAR
+├── body            TEXT
+├── is_active       BOOLEAN DEFAULT true
+├── created_at      TIMESTAMP
+
+-- Payments
+payments
+├── id              UUID PK
+├── user_id         UUID FK(users.id)
+├── package_id      UUID FK(credit_packages.id)
+├── amount_usd      DECIMAL
+├── payment_method  VARCHAR                 -- 'stripe', 'paypal'
+├── payment_ref     VARCHAR                 -- external payment ID
+├── status          ENUM('pending','completed','failed','refunded')
+├── created_at      TIMESTAMP
+6. Authentication System
+Component	Implementation
+Strategy	JWT (access + refresh tokens)
+Access token	Short-lived (15min), stored in memory
+Refresh token	Long-lived (7d), stored in httpOnly cookie
+Password	bcrypt hashed, min 8 chars
+Email verification	Token-based link sent on register
+Password reset	Time-limited token via email
+Role-based access	admin, reseller, sub_reseller with middleware guards
+Sub-reseller scoping	Sub-resellers only see their own devices; parent reseller sees all
+Rate limiting	On login/register endpoints
+Session logging	Every login attempt logged with IP + user agent
+7. Real-time & Async Features
+Credit balance updates: WebSocket or polling after purchase/activation
+Payment webhooks: Stripe/PayPal webhook → async credit fulfillment
+Device status checks: Background cron job to mark expired devices
+Notifications: Real-time toast via WebSocket when credit purchase completes
+Email sending: Async queue (registration verification, receipts, password reset)
+8. Third-Party Integrations
+Integration	Purpose
+Stripe / PayPal	Payment processing for credit purchases
+SMTP (SendGrid/SES)	Transactional emails (verification, receipts, password reset)
+WhatsApp Business API	Customer support channel
+App Activation APIs	Per-app activation endpoints (IBO, BOB, Virginia, etc.) — the core business logic calls external APIs or internal services to register a MAC address as licensed
+Cloudflare	CDN, DDoS protection
+i18n	Multi-language support (EN, PT-BR, ES, FR, NL)
+9. Full System Architecture
+
+┌──────────────────────────────────────────────────────────┐
+│                      CLIENT (Browser)                     │
+│  Next.js App (React + TypeScript + Tailwind CSS)         │
+│  ┌─────────┐ ┌──────────┐ ┌─────────┐ ┌──────────────┐  │
+│  │ Landing  │ │  Auth    │ │Dashboard│ │  Admin Panel  │  │
+│  │  Page    │ │  Pages   │ │  Pages  │ │   (if admin)  │  │
+│  └─────────┘ └──────────┘ └─────────┘ └──────────────┘  │
+└──────────────────────┬───────────────────────────────────┘
+                       │ HTTPS (REST API + WebSocket)
+┌──────────────────────▼───────────────────────────────────┐
+│                   API GATEWAY / NGINX                     │
+│              (rate limiting, SSL termination)             │
+└──────────────────────┬───────────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────────┐
+│                  BACKEND (Node.js / NestJS)               │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │
+│  │  Auth    │ │ Device   │ │ Credit   │ │  Reseller   │  │
+│  │ Module   │ │ Module   │ │ Module   │ │  Module     │  │
+│  └──────────┘ └──────────┘ └──────────┘ └────────────┘  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │
+│  │  Logs    │ │ Payment  │ │  Apps    │ │ Notification│  │
+│  │ Module   │ │ Module   │ │ Module   │ │  Module     │  │
+│  └──────────┘ └──────────┘ └──────────┘ └────────────┘  │
+└───────┬────────────┬────────────┬────────────┬───────────┘
+        │            │            │            │
+   ┌────▼────┐  ┌────▼────┐  ┌───▼───┐  ┌────▼─────┐
+   │PostgreSQL│  │  Redis  │  │Stripe │  │ SMTP/SES │
+   │   (DB)   │  │ (cache, │  │PayPal │  │ (email)  │
+   │          │  │ sessions│  │       │  │          │
+   └──────────┘  │ queues) │  └───────┘  └──────────┘
+                 └─────────┘
+        ┌────────────┐
+        │  Cron Jobs  │
+        │ (expiry     │
+        │  checker)   │
+        └─────────────┘
+10. Tech Stack Recommendation
+Layer	Technology	Why
+Frontend	Next.js 14+ (App Router) + TypeScript	SSR for landing, CSR for dashboard, great DX
+UI Library	shadcn/ui + Tailwind CSS	Clean dashboard components, highly customizable
+State	TanStack Query (React Query)	Server state caching, auto-refetch
+Forms	React Hook Form + Zod	Validation for MAC addresses, forms
+Tables	TanStack Table	Sortable, filterable, paginated device/log tables
+Charts	Recharts	Dashboard stats visualization
+Backend	NestJS (Node.js + TypeScript)	Modular, scalable, built-in guards/pipes/interceptors
+ORM	Prisma	Type-safe DB access, great migrations
+Database	PostgreSQL	Relational, JSONB for logs, robust
+Cache/Queue	Redis + BullMQ	Session cache, async email/webhook jobs
+Auth	Passport.js + JWT	Flexible auth strategies
+Payments	Stripe SDK + PayPal SDK	Credit purchase processing
+Email	Nodemailer + SendGrid/SES	Transactional emails
+i18n	next-intl	Multi-language (EN, PT, ES, FR, NL)
+Deployment	Docker + VPS (or Vercel + Railway)	Simple, cost-effective
+Monitoring	Sentry (errors) + Uptime Kuma	Error tracking, uptime monitoring
+11. Step-by-Step Implementation Plan
+Phase 1: Foundation (Week 1-2)
+Initialize monorepo (Turborepo or Nx) with apps/web + apps/api
+Set up Next.js with Tailwind + shadcn/ui
+Set up NestJS with Prisma + PostgreSQL
+Create database schema (all tables above), run migrations
+Implement auth module (register, login, JWT, email verification, password reset)
+Build auth pages (login, register, forgot password)
+Build dashboard layout (sidebar, topbar, responsive)
+Phase 2: Core Features (Week 3-4)
+Build Apps module — seed 20+ IPTV apps into DB
+Build Device module — CRUD + activate by MAC address + renew
+Build Credit module — balance tracking, deduction on activation (transactional)
+Build dashboard home page — stats cards, recent activity, announcements
+Build device list page — DataTable with search, filter by app/status, pagination
+Build "Add Device" page — app selector grid, MAC input, package selector
+Build device detail page — info, renew button, disable toggle
+Phase 3: Credits & Payments (Week 5)
+Build credit packages page — grid of purchasable tiers
+Integrate Stripe checkout for credit purchases
+Implement Stripe webhook handler → credit fulfillment
+Build credit history page — transaction log table
+Add PayPal as alternative payment method
+Phase 4: Reseller System (Week 6)
+Build sub-reseller CRUD (parent can create, assign credits, set margins)
+Implement hierarchical scoping (sub-reseller sees only their devices)
+Build sub-reseller management page (list, add, transfer credits)
+Implement profit margin calculation
+Phase 5: Logs, i18n, Polish (Week 7)
+Build activity/credit/login log system with automatic logging
+Build logs page with tabs and filterable tables
+Add i18n (next-intl) — EN, PT-BR, ES, FR, NL
+Add cron job: mark expired devices daily
+Add email notifications (registration, purchase receipts)
+Phase 6: Admin & Deployment (Week 8)
+Build admin panel (manage all users, adjust credits, manage apps, post announcements)
+Add rate limiting, CORS, helmet, input sanitization
+Write API tests (Jest) + E2E tests (Playwright)
+Dockerize both services
+Deploy (Vercel for frontend + Railway/VPS for API + managed PostgreSQL)
+Set up monitoring (Sentry + Uptime Kuma)
+Want me to start building this? I can begin with Phase 1 — project scaffolding, database schema, and auth system.
+
+Sources:
+
+IBOSOL B2B
+IBOSOL Master Panel for Resellers
+IPTV Panel Ultimate Guide
+IBOSOL Official
+IBOSOL Reseller Panel

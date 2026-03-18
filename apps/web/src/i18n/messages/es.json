@@ -1,0 +1,78 @@
+{
+  "nav": {
+    "dashboard": "Panel",
+    "devices": "Dispositivos",
+    "credits": "Créditos",
+    "subResellers": "Sub-Distribuidores",
+    "logs": "Registros",
+    "profile": "Perfil",
+    "manageApps": "Gestionar Aplicaciones",
+    "announcements": "Anuncios",
+    "userManagement": "Gestión de Usuarios",
+    "admin": "Administración"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "overview": "Resumen de su cuenta de distribuidor",
+    "totalDevices": "Total de Dispositivos",
+    "active": "Activos",
+    "expired": "Expirados",
+    "credits": "Créditos",
+    "recentActivations": "Activaciones Recientes",
+    "subResellers": "Sub-Distribuidores",
+    "announcements": "Anuncios"
+  },
+  "devices": {
+    "title": "Dispositivos",
+    "addDevice": "Añadir Dispositivo",
+    "searchPlaceholder": "Buscar por MAC o notas",
+    "renew": "Renovar",
+    "disable": "Desactivar",
+    "enable": "Activar",
+    "delete": "Eliminar",
+    "macAddress": "Dirección MAC",
+    "app": "Aplicación",
+    "package": "Paquete",
+    "status": "Estado",
+    "activated": "Activado",
+    "expires": "Expira",
+    "actions": "Acciones"
+  },
+  "credits": {
+    "title": "Créditos",
+    "currentBalance": "Saldo Actual",
+    "buyCredits": "Comprar Créditos",
+    "transferCredits": "Transferir Créditos",
+    "transactionHistory": "Historial de Transacciones",
+    "credits": "créditos",
+    "buyNow": "Comprar Ahora"
+  },
+  "profile": {
+    "title": "Perfil",
+    "accountInformation": "Información de la Cuenta",
+    "security": "Seguridad",
+    "changePassword": "Cambiar Contraseña",
+    "currentPassword": "Contraseña Actual",
+    "newPassword": "Nueva Contraseña",
+    "confirmPassword": "Confirmar Contraseña"
+  },
+  "common": {
+    "loading": "Cargando",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "create": "Crear",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "disabled": "Desactivado",
+    "enabled": "Activado",
+    "page": "Página",
+    "of": "de",
+    "showing": "Mostrando",
+    "noData": "Sin datos",
+    "confirm": "Confirmar"
+  }
+}

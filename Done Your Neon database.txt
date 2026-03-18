@@ -1,0 +1,8 @@
+Done. Your Neon database is set up with:
+
+9 tables created (users, devices, apps, credit_packages, credit_transactions, activity_logs, login_logs, announcements, payments)
+22 IPTV apps seeded
+7 credit packages seeded
+2 users: admin@iptv-panel.com (admin, 10k credits) and demo@reseller.com (reseller, 100 credits)
+1 welcome announcement
+

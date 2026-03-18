@@ -1,0 +1,78 @@
+{
+  "nav": {
+    "dashboard": "Painel",
+    "devices": "Dispositivos",
+    "credits": "Créditos",
+    "subResellers": "Sub-Revendedores",
+    "logs": "Registos",
+    "profile": "Perfil",
+    "manageApps": "Gerir Aplicações",
+    "announcements": "Anúncios",
+    "userManagement": "Gestão de Utilizadores",
+    "admin": "Administração"
+  },
+  "dashboard": {
+    "title": "Painel",
+    "overview": "Visão geral da sua conta de revendedor",
+    "totalDevices": "Total de Dispositivos",
+    "active": "Ativos",
+    "expired": "Expirados",
+    "credits": "Créditos",
+    "recentActivations": "Ativações Recentes",
+    "subResellers": "Sub-Revendedores",
+    "announcements": "Anúncios"
+  },
+  "devices": {
+    "title": "Dispositivos",
+    "addDevice": "Adicionar Dispositivo",
+    "searchPlaceholder": "Pesquisar por MAC ou notas",
+    "renew": "Renovar",
+    "disable": "Desativar",
+    "enable": "Ativar",
+    "delete": "Eliminar",
+    "macAddress": "Endereço MAC",
+    "app": "Aplicação",
+    "package": "Pacote",
+    "status": "Estado",
+    "activated": "Ativado",
+    "expires": "Expira",
+    "actions": "Ações"
+  },
+  "credits": {
+    "title": "Créditos",
+    "currentBalance": "Saldo Atual",
+    "buyCredits": "Comprar Créditos",
+    "transferCredits": "Transferir Créditos",
+    "transactionHistory": "Histórico de Transações",
+    "credits": "créditos",
+    "buyNow": "Comprar Agora"
+  },
+  "profile": {
+    "title": "Perfil",
+    "accountInformation": "Informações da Conta",
+    "security": "Segurança",
+    "changePassword": "Alterar Palavra-passe",
+    "currentPassword": "Palavra-passe Atual",
+    "newPassword": "Nova Palavra-passe",
+    "confirmPassword": "Confirmar Palavra-passe"
+  },
+  "common": {
+    "loading": "A carregar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "create": "Criar",
+    "search": "Pesquisar",
+    "filter": "Filtrar",
+    "active": "Ativo",
+    "inactive": "Inativo",
+    "disabled": "Desativado",
+    "enabled": "Ativado",
+    "page": "Página",
+    "of": "de",
+    "showing": "A mostrar",
+    "noData": "Sem dados",
+    "confirm": "Confirmar"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "devices": "Devices",
+    "credits": "Credits",
+    "subResellers": "Sub-Resellers",
+    "logs": "Logs",
+    "profile": "Profile",
+    "manageApps": "Manage Apps",
+    "announcements": "Announcements",
+    "userManagement": "User Management",
+    "admin": "Admin"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overview of your reseller account",
+    "totalDevices": "Total Devices",
+    "active": "Active",
+    "expired": "Expired",
+    "credits": "Credits",
+    "recentActivations": "Recent Activations",
+    "subResellers": "Sub-Resellers",
+    "announcements": "Announcements"
+  },
+  "devices": {
+    "title": "Devices",
+    "addDevice": "Add Device",
+    "searchPlaceholder": "Search by MAC or notes",
+    "renew": "Renew",
+    "disable": "Disable",
+    "enable": "Enable",
+    "delete": "Delete",
+    "macAddress": "MAC Address",
+    "app": "App",
+    "package": "Package",
+    "status": "Status",
+    "activated": "Activated",
+    "expires": "Expires",
+    "actions": "Actions"
+  },
+  "credits": {
+    "title": "Credits",
+    "currentBalance": "Current Balance",
+    "buyCredits": "Buy Credits",
+    "transferCredits": "Transfer Credits",
+    "transactionHistory": "Transaction History",
+    "credits": "credits",
+    "buyNow": "Buy Now"
+  },
+  "profile": {
+    "title": "Profile",
+    "accountInformation": "Account Information",
+    "security": "Security",
+    "changePassword": "Change Password",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password"
+  },
+  "common": {
+    "loading": "Loading",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "active": "Active",
+    "inactive": "Inactive",
+    "disabled": "Disabled",
+    "enabled": "Enabled",
+    "page": "Page",
+    "of": "of",
+    "showing": "Showing",
+    "noData": "No data",
+    "confirm": "Confirm"
+  }
+}

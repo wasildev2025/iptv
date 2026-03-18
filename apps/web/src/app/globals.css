@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* IBOSOL-inspired red/white light theme */
+    --background: 0 0% 98%;
+    --foreground: 220 20% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+    --primary: 0 78% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 220 20% 10%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 46%;
+    --accent: 0 70% 96%;
+    --accent-foreground: 0 78% 40%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 0 78% 52%;
+    --radius: 0.5rem;
+    /* Sidebar: dark charcoal */
+    --sidebar: 220 20% 12%;
+    --sidebar-foreground: 220 10% 92%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-primary: 0 78% 55%;
+  }
+
+  .dark {
+    --background: 220 20% 7%;
+    --foreground: 220 10% 92%;
+    --card: 220 18% 10%;
+    --card-foreground: 220 10% 92%;
+    --popover: 220 18% 10%;
+    --popover-foreground: 220 10% 92%;
+    --primary: 0 72% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 220 10% 92%;
+    --muted: 220 15% 15%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 0 50% 15%;
+    --accent-foreground: 0 72% 65%;
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 0 72% 55%;
+    --sidebar: 220 20% 7%;
+    --sidebar-foreground: 220 10% 85%;
+    --sidebar-accent: 220 15% 12%;
+    --sidebar-primary: 0 72% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Smooth scrollbar */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 3px;
+  }
+}
+
+/* Page transition animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* IBOSOL red gradient for headers */
+.ibosol-gradient {
+  background: linear-gradient(135deg, hsl(0, 78%, 52%) 0%, hsl(0, 70%, 42%) 100%);
+}
+
+/* Glass effect for cards */
+.glass-card {
+  backdrop-filter: blur(10px);
+  background: hsl(var(--card) / 0.8);
+}

@@ -1,0 +1,78 @@
+{
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "devices": "Appareils",
+    "credits": "Crédits",
+    "subResellers": "Sous-Revendeurs",
+    "logs": "Journaux",
+    "profile": "Profil",
+    "manageApps": "Gérer les Applications",
+    "announcements": "Annonces",
+    "userManagement": "Gestion des Utilisateurs",
+    "admin": "Administration"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "overview": "Aperçu de votre compte revendeur",
+    "totalDevices": "Total des Appareils",
+    "active": "Actifs",
+    "expired": "Expirés",
+    "credits": "Crédits",
+    "recentActivations": "Activations Récentes",
+    "subResellers": "Sous-Revendeurs",
+    "announcements": "Annonces"
+  },
+  "devices": {
+    "title": "Appareils",
+    "addDevice": "Ajouter un Appareil",
+    "searchPlaceholder": "Rechercher par MAC ou notes",
+    "renew": "Renouveler",
+    "disable": "Désactiver",
+    "enable": "Activer",
+    "delete": "Supprimer",
+    "macAddress": "Adresse MAC",
+    "app": "Application",
+    "package": "Forfait",
+    "status": "Statut",
+    "activated": "Activé",
+    "expires": "Expire",
+    "actions": "Actions"
+  },
+  "credits": {
+    "title": "Crédits",
+    "currentBalance": "Solde Actuel",
+    "buyCredits": "Acheter des Crédits",
+    "transferCredits": "Transférer des Crédits",
+    "transactionHistory": "Historique des Transactions",
+    "credits": "crédits",
+    "buyNow": "Acheter Maintenant"
+  },
+  "profile": {
+    "title": "Profil",
+    "accountInformation": "Informations du Compte",
+    "security": "Sécurité",
+    "changePassword": "Changer le Mot de passe",
+    "currentPassword": "Mot de passe Actuel",
+    "newPassword": "Nouveau Mot de passe",
+    "confirmPassword": "Confirmer le Mot de passe"
+  },
+  "common": {
+    "loading": "Chargement",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "disabled": "Désactivé",
+    "enabled": "Activé",
+    "page": "Page",
+    "of": "sur",
+    "showing": "Affichage",
+    "noData": "Aucune donnée",
+    "confirm": "Confirmer"
+  }
+}

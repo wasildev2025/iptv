@@ -1,0 +1,78 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "devices": "Apparaten",
+    "credits": "Tegoeden",
+    "subResellers": "Sub-Resellers",
+    "logs": "Logboeken",
+    "profile": "Profiel",
+    "manageApps": "Apps Beheren",
+    "announcements": "Aankondigingen",
+    "userManagement": "Gebruikersbeheer",
+    "admin": "Beheer"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "overview": "Overzicht van uw reselleraccount",
+    "totalDevices": "Totaal Apparaten",
+    "active": "Actief",
+    "expired": "Verlopen",
+    "credits": "Tegoeden",
+    "recentActivations": "Recente Activeringen",
+    "subResellers": "Sub-Resellers",
+    "announcements": "Aankondigingen"
+  },
+  "devices": {
+    "title": "Apparaten",
+    "addDevice": "Apparaat Toevoegen",
+    "searchPlaceholder": "Zoeken op MAC of notities",
+    "renew": "Verlengen",
+    "disable": "Uitschakelen",
+    "enable": "Inschakelen",
+    "delete": "Verwijderen",
+    "macAddress": "MAC-adres",
+    "app": "App",
+    "package": "Pakket",
+    "status": "Status",
+    "activated": "Geactiveerd",
+    "expires": "Verloopt",
+    "actions": "Acties"
+  },
+  "credits": {
+    "title": "Tegoeden",
+    "currentBalance": "Huidig Saldo",
+    "buyCredits": "Tegoeden Kopen",
+    "transferCredits": "Tegoeden Overdragen",
+    "transactionHistory": "Transactiegeschiedenis",
+    "credits": "tegoeden",
+    "buyNow": "Nu Kopen"
+  },
+  "profile": {
+    "title": "Profiel",
+    "accountInformation": "Accountinformatie",
+    "security": "Beveiliging",
+    "changePassword": "Wachtwoord Wijzigen",
+    "currentPassword": "Huidig Wachtwoord",
+    "newPassword": "Nieuw Wachtwoord",
+    "confirmPassword": "Wachtwoord Bevestigen"
+  },
+  "common": {
+    "loading": "Laden",
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "edit": "Bewerken",
+    "delete": "Verwijderen",
+    "create": "Aanmaken",
+    "search": "Zoeken",
+    "filter": "Filteren",
+    "active": "Actief",
+    "inactive": "Inactief",
+    "disabled": "Uitgeschakeld",
+    "enabled": "Ingeschakeld",
+    "page": "Pagina",
+    "of": "van",
+    "showing": "Weergave",
+    "noData": "Geen gegevens",
+    "confirm": "Bevestigen"
+  }
+}

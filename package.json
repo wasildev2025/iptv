@@ -1,0 +1,23 @@
+{
+  "name": "iptv-panel",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:web": "npm -w apps/web run dev",
+    "dev:api": "npm -w apps/api run start:dev",
+    "build": "npm -w apps/api run build && npm -w apps/web run build",
+    "build:web": "npm -w apps/web run build",
+    "build:api": "npm -w apps/api run build",
+    "db:migrate": "npm -w apps/api run db:migrate",
+    "db:seed": "npm -w apps/api run db:seed",
+    "db:studio": "npm -w apps/api run db:studio",
+    "lint": "npm -w apps/web run lint && npm -w apps/api run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
