@@ -147,7 +147,12 @@ export class AuthController {
     @Res({ passthrough: true }) res: any,
   ) {
     await this.authService.logout(userId);
-    res.clearCookie('refresh_token');
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+    });
     return { message: 'Logged out successfully' };
   }
 
@@ -179,7 +184,12 @@ export class AuthController {
       this.setRefreshTokenCookie(res, tokens.refreshToken);
       return { accessToken: tokens.accessToken };
     } catch {
-      res.clearCookie('refresh_token');
+      res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+    });
       return res.status(401).json({ message: 'Invalid refresh token' });
     }
   }
@@ -213,7 +223,7 @@ export class AuthController {
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/',
     });
