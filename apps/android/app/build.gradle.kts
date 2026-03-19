@@ -16,7 +16,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:4005/api\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api-production-e247.up.railway.app/api\"")
     }
 
     buildFeatures {

@@ -9,7 +9,7 @@ interface SocialWidgetData {
   telegram_number: string;
 }
 
-export function SocialWidget() {
+export function SocialWidget({ sidebarCollapsed }: { sidebarCollapsed: boolean }) {
   const { data } = useQuery<SocialWidgetData>({
     queryKey: ["social-widget"],
     queryFn: async () => (await api.get("/dashboard/social-widget")).data,
@@ -19,7 +19,7 @@ export function SocialWidget() {
   if (!data) return null;
 
   return (
-    <div className="fixed bottom-6 left-6 z-50 flex items-center gap-3">
+    <div className={`fixed bottom-6 z-50 flex items-center gap-3 transition-all duration-300 ${sidebarCollapsed ? "left-20" : "left-[17rem]"}`}>
       {data.whatsapp_number && (
         <a
           href={`https://wa.me/${data.whatsapp_number.replace(/[^0-9]/g, "")}?text=Hi%2C%20I%20need%20help`}

@@ -53,7 +53,7 @@ export default function DashboardLayout({
       >
         <div className="animate-fade-in p-5">{children}</div>
       </main>
-      <SocialWidget />
+      <SocialWidget sidebarCollapsed={sidebarCollapsed} />
     </div>
   );
 }
