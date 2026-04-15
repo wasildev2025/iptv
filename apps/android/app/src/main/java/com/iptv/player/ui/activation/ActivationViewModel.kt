@@ -82,7 +82,8 @@ class ActivationViewModel @Inject constructor(
     private fun loadApps() {
         viewModelScope.launch {
             _appsLoading.value = true
-            val result = repository.getApps()
+            // Pass the MAC address to fetch only allowed apps for this device
+            val result = repository.getApps(_macAddress.value)
             result.onSuccess { appList ->
                 _apps.value = appList
                 if (appList.isNotEmpty()) {

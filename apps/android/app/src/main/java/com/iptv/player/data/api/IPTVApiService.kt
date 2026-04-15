@@ -17,9 +17,11 @@ interface IPTVApiService {
         @Body request: Map<String, @JvmSuppressWildcards Any>
     ): Response<Map<String, Any>>
 
-    // Get allowed apps list
-    @GET("apps/allowed")
-    suspend fun getAllowedApps(): Response<List<AppInfo>>
+    // Get allowed apps list for a specific device
+    @GET("apps/allowed/{macAddress}")
+    suspend fun getAllowedApps(
+        @Path("macAddress") macAddress: String
+    ): Response<List<AppInfo>>
 
     // Get all active apps
     @GET("apps")
