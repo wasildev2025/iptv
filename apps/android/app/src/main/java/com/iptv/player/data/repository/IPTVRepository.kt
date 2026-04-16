@@ -9,6 +9,8 @@ import com.iptv.player.data.parser.M3UParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,16 +28,35 @@ class IPTVRepository @Inject constructor(
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                Result.failure(Exception(response.errorBody()?.string() ?: "Device not activated"))
+                Result.failure(Exception(extractApiError(response, "Device not activated")))
             }
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    private fun extractApiError(response: Response<*>, fallback: String): String {
+        val body = response.errorBody()?.string().orEmpty()
+        if (body.isBlank()) return fallback
+        return try {
+            val json = JSONObject(body)
+            when (val msg = json.opt("message")) {
+                is String -> msg
+                is org.json.JSONArray -> (0 until msg.length())
+                    .joinToString(", ") { msg.optString(it) }
+                else -> fallback
+            }
+        } catch (_: Exception) {
+            fallback
+        }
+    }
+
     suspend fun getApps(macAddress: String = ""): Result<List<AppInfo>> {
         return try {
-            val response = api.getApps()
+            val request = AppsListRequest(
+                macAddress = macAddress.takeIf { it.isNotBlank() }
+            )
+            val response = api.getApps(request)
             if (response.isSuccessful) Result.success(response.body() ?: emptyList())
             else Result.failure(Exception("Failed to fetch apps"))
         } catch (e: Exception) {

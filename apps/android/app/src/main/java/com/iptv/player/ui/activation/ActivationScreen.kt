@@ -146,7 +146,24 @@ fun ActivationScreen(
                 onAppSelected = { viewModel.selectApp(it) }
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // If no activated apps for this MAC, tell the user exactly what to do.
+            if (!appsLoading && apps.isEmpty() && macAddress.isNotBlank()) {
+                Text(
+                    text = "No activated apps found for this device. " +
+                        "Please ask your reseller to activate the MAC address shown above.",
+                    color = Red80,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Red40.copy(alpha = 0.1f))
+                        .padding(16.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             // Action Area
             when (val state = activationState) {

@@ -11,7 +11,10 @@ interface IPTVApiService {
         @Body request: ActivationRequest
     ): Response<DeviceCheckResponse>
 
-    // Public list of active apps — no auth required
+    // Public list of apps. If body.macAddress is set, only apps activated
+    // for that MAC are returned.
     @POST("public/apps")
-    suspend fun getApps(): Response<List<AppInfo>>
+    suspend fun getApps(
+        @Body request: AppsListRequest = AppsListRequest()
+    ): Response<List<AppInfo>>
 }

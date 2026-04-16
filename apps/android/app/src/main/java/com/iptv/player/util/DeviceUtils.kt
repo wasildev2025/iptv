@@ -18,15 +18,13 @@ object DeviceUtils {
             return realMac
         }
 
-        // Fallback to pseudo-MAC
+        // Fallback: deterministic pseudo-MAC derived from ANDROID_ID.
         val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         val hash = MessageDigest.getInstance("MD5").digest(androidId.toByteArray())
 
-        // Format as MAC address (use first 6 bytes of MD5 hash)
-        return String.format(
-            "%02X:%02X:%02X:%02X:%02X:%02X",
-            hash[0], hash[1], hash[2], hash[3], hash[4], hash[5]
-        )
+        return (0..5).joinToString(":") { i ->
+            String.format("%02X", hash[i].toInt() and 0xFF)
+        }
     }
 
     private fun getRealMacAddress(): String? {
@@ -36,16 +34,11 @@ object DeviceUtils {
                 if (!nif.name.equals("wlan0", ignoreCase = true)) continue
 
                 val macBytes = nif.hardwareAddress ?: return null
+                if (macBytes.isEmpty()) return null
 
-                val res1 = StringBuilder()
-                for (b in macBytes) {
-                    res1.append(String.format("%02X:", b))
+                return macBytes.joinToString(":") { b ->
+                    String.format("%02X", b.toInt() and 0xFF)
                 }
-
-                if (res1.isNotEmpty()) {
-                    res1.deleteCharAt(res1.length - 1)
-                }
-                return res1.toString()
             }
             null
         } catch (ex: Exception) {

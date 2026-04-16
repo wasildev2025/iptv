@@ -28,6 +28,10 @@ data class ActivationRequest(
     val appSlug: String? = null
 )
 
+data class AppsListRequest(
+    val macAddress: String? = null
+)
+
 data class PlaylistResponse(
     val id: String,
     val macAddress: String,

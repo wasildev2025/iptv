@@ -71,12 +71,48 @@ export class PublicController {
 
   @Post('apps')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Public list of active apps for device selection' })
-  async listApps() {
-    return this.prisma.app.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, slug: true, iconUrl: true },
-      orderBy: { name: 'asc' },
+  @ApiOperation({
+    summary:
+      'Public list of apps. If macAddress is provided, returns only apps that have an active/trial activation for that MAC.',
+  })
+  async listApps(@Body() body: { macAddress?: string } = {}) {
+    const raw = body?.macAddress?.trim();
+
+    if (!raw) {
+      return this.prisma.app.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true, slug: true, iconUrl: true },
+        orderBy: { name: 'asc' },
+      });
+    }
+
+    if (!MAC_REGEX.test(raw)) {
+      throw new BadRequestException(
+        'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)',
+      );
+    }
+    const mac = raw.toUpperCase().replace(/-/g, ':');
+
+    const devices = await this.prisma.device.findMany({
+      where: {
+        status: { in: ['active', 'trial'] },
+        OR: [{ macAddress: mac }, { macAddressAlt: mac }],
+        app: { isActive: true },
+      },
+      select: {
+        app: { select: { id: true, name: true, slug: true, iconUrl: true } },
+      },
+      orderBy: { activatedAt: 'desc' },
     });
+
+    const seen = new Set<string>();
+    const uniqueApps: { id: string; name: string; slug: string; iconUrl: string | null }[] = [];
+    for (const d of devices) {
+      if (d.app && !seen.has(d.app.id)) {
+        seen.add(d.app.id);
+        uniqueApps.push(d.app);
+      }
+    }
+    return uniqueApps;
   }
 }
