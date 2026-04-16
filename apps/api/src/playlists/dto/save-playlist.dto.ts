@@ -2,13 +2,14 @@ import {
   IsString,
   IsBoolean,
   IsOptional,
+  IsUrl,
   Matches,
   MaxLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
-const MAC_REGEX = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
+const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
 
 export class SavePlaylistDto {
   @ApiProperty({ example: 'AA:BB:CC:DD:EE:FF' })
@@ -17,35 +18,39 @@ export class SavePlaylistDto {
     message: 'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)',
   })
   @Transform(({ value }) => value?.toUpperCase().replace(/-/g, ':'))
-  mac_address: string;
+  macAddress: string;
 
   @ApiProperty({ example: 'app-uuid-here' })
   @IsString()
-  app_id: string;
+  appId: string;
 
   @ApiProperty({ example: 'http://example.com/playlist.m3u' })
   @IsString()
   @MaxLength(2048)
-  playlist_url: string;
+  @IsUrl({ require_tld: false }, { message: 'Invalid playlist URL' })
+  playlistUrl: string;
 
   @ApiProperty({ example: 'My Playlist' })
   @IsString()
   @MaxLength(255)
-  playlist_name: string;
+  playlistName: string;
 
-  @ApiProperty({ example: 'android' })
+  @ApiProperty({ example: 'web', required: false })
+  @IsOptional()
   @IsString()
-  app_platform: string;
+  @MaxLength(50)
+  appPlatform?: string;
 
-  @ApiProperty({ example: false })
+  @ApiProperty({ example: false, required: false })
+  @IsOptional()
   @IsBoolean()
-  protect: boolean;
+  isProtected?: boolean;
 
   @ApiProperty({ required: false, example: 'http://example.com/epg.xml' })
   @IsOptional()
   @IsString()
   @MaxLength(2048)
-  xml_url?: string;
+  xmlUrl?: string;
 
   @ApiProperty({ required: false, example: '1234' })
   @IsOptional()

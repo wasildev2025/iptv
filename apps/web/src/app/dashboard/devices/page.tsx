@@ -73,7 +73,7 @@ const addDeviceSchema = z.object({
     .or(z.literal("")),
   packageType: z.enum(["yearly", "lifetime"]),
   notes: z.string().max(500).optional(),
-  playlistUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
+  playlistUrl: z.string().url("Enter a valid playlist URL (http:// or https://)"),
 });
 
 type AddDeviceForm = z.infer<typeof addDeviceSchema>;
@@ -387,7 +387,6 @@ export default function DevicesPage() {
               const cleaned = {
                 ...data,
                 macAddressAlt: data.macAddressAlt || undefined,
-                playlistUrl: data.playlistUrl || undefined,
                 notes: data.notes || undefined,
               };
               addMutation.mutate(cleaned);
@@ -436,12 +435,15 @@ export default function DevicesPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Playlist URL (optional)</Label>
+              <Label>Playlist URL *</Label>
               <Input
-                placeholder="https://..."
+                placeholder="https://example.com/get.php?..."
                 error={form.formState.errors.playlistUrl?.message}
                 {...form.register("playlistUrl")}
               />
+              <p className="text-xs text-muted-foreground">
+                The M3U/Xtream playlist the device will load. Required — the box can&apos;t play anything without this.
+              </p>
             </div>
 
             <div className="space-y-1.5">

@@ -20,12 +20,12 @@ export class PlaylistsService {
     // Verify the device exists for this MAC + app and belongs to the user
     const device = await this.prisma.device.findFirst({
       where: {
-        macAddress: dto.mac_address,
-        appId: dto.app_id,
+        macAddress: dto.macAddress,
+        appId: dto.appId,
         userId,
       },
       include: {
-        app: { select: { id: true, name: true } },
+        app: { select: { id: true, name: true, slug: true } },
       },
     });
 
@@ -35,22 +35,33 @@ export class PlaylistsService {
       );
     }
 
-    const playlist = await this.prisma.playlist.create({
-      data: {
-        userId,
-        macAddress: dto.mac_address,
-        appId: dto.app_id,
-        appPlatform: dto.app_platform,
-        playlistUrl: dto.playlist_url,
-        playlistName: dto.playlist_name,
-        xmlUrl: dto.xml_url || '',
-        pin: dto.pin || undefined,
-        isProtected: dto.protect,
-      },
+    const playlist = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.playlist.create({
+        data: {
+          userId,
+          macAddress: dto.macAddress,
+          appId: dto.appId,
+          appPlatform: dto.appPlatform ?? device.app.slug,
+          playlistUrl: dto.playlistUrl,
+          playlistName: dto.playlistName,
+          xmlUrl: dto.xmlUrl || '',
+          pin: dto.pin || undefined,
+          isProtected: dto.isProtected ?? false,
+        },
+      });
+
+      // Keep the device's primary playlistUrl in sync so the Android app's
+      // public/check-activation response carries it without extra lookups.
+      await tx.device.update({
+        where: { id: device.id },
+        data: { playlistUrl: dto.playlistUrl },
+      });
+
+      return created;
     });
 
     this.logger.log(
-      `Playlist "${dto.playlist_name}" saved for device ${dto.mac_address} by user ${userId}`,
+      `Playlist "${dto.playlistName}" saved for device ${dto.macAddress} by user ${userId}`,
     );
 
     return playlist;

@@ -39,6 +39,9 @@ sealed class ActivationState {
     data class Activated(val playlistUrl: String) : ActivationState()
     data class NotActivated(val error: String) : ActivationState()
     data class AlreadyActivated(val playlistUrl: String) : ActivationState()
+    // Device is recognised and active on the server, but no playlist has been
+    // configured for it yet. User should paste a playlist URL or contact their reseller.
+    data class NeedsPlaylist(val appName: String) : ActivationState()
 }
 
 @HiltViewModel
@@ -110,26 +113,54 @@ class ActivationViewModel @Inject constructor(
             _activationState.value = ActivationState.Loading
             val result = repository.checkDeviceActivation(mac, app.id)
             result.onSuccess { response ->
-                if (response.status == "active" && !response.playlistUrl.isNullOrBlank()) {
-                    context.activationDataStore.edit { prefs ->
-                        prefs[PrefsKeys.IS_ACTIVATED] = true
-                        prefs[PrefsKeys.PLAYLIST_URL] = response.playlistUrl
-                        prefs[PrefsKeys.APP_ID] = app.id
-                        prefs[PrefsKeys.APP_NAME] = app.name
-                        prefs[PrefsKeys.MAC_ADDRESS] = mac
-                        prefs[PrefsKeys.EXPIRES_AT] = response.expiresAt ?: ""
+                when {
+                    response.status == "active" && !response.playlistUrl.isNullOrBlank() -> {
+                        persistActivation(app, mac, response.playlistUrl, response.expiresAt)
+                        _activationState.value = ActivationState.Activated(response.playlistUrl)
                     }
-                    _activationState.value = ActivationState.Activated(response.playlistUrl)
-                } else {
-                    _activationState.value = ActivationState.NotActivated(
-                        "Device not activated. Contact your reseller."
-                    )
+                    response.status == "active" -> {
+                        _activationState.value = ActivationState.NeedsPlaylist(app.name)
+                    }
+                    else -> {
+                        _activationState.value = ActivationState.NotActivated(
+                            "Device status: ${response.status}. Contact your reseller."
+                        )
+                    }
                 }
             }.onFailure { e ->
                 _activationState.value = ActivationState.NotActivated(
                     e.message ?: "Activation check failed. Please try again."
                 )
             }
+        }
+    }
+
+    fun submitManualPlaylist(url: String) {
+        val trimmed = url.trim()
+        if (trimmed.isBlank()) {
+            _activationState.value = ActivationState.NotActivated("Please enter a playlist URL.")
+            return
+        }
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            _activationState.value = ActivationState.NotActivated("Playlist URL must start with http:// or https://")
+            return
+        }
+        val app = _selectedApp.value ?: return
+        val mac = _macAddress.value
+        viewModelScope.launch {
+            persistActivation(app, mac, trimmed, expiresAt = null)
+            _activationState.value = ActivationState.Activated(trimmed)
+        }
+    }
+
+    private suspend fun persistActivation(app: AppInfo, mac: String, playlistUrl: String, expiresAt: String?) {
+        context.activationDataStore.edit { prefs ->
+            prefs[PrefsKeys.IS_ACTIVATED] = true
+            prefs[PrefsKeys.PLAYLIST_URL] = playlistUrl
+            prefs[PrefsKeys.APP_ID] = app.id
+            prefs[PrefsKeys.APP_NAME] = app.name
+            prefs[PrefsKeys.MAC_ADDRESS] = mac
+            prefs[PrefsKeys.EXPIRES_AT] = expiresAt ?: ""
         }
     }
 

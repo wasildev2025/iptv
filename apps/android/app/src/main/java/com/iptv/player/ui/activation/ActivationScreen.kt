@@ -29,6 +29,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -201,6 +203,61 @@ fun ActivationScreen(
                             text = "Checking activation...",
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
+                    }
+                }
+
+                is ActivationState.NeedsPlaylist -> {
+                    var manualUrl by remember { mutableStateOf("") }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "${state.appName} is activated for this device, " +
+                                "but no playlist URL is configured. Paste your playlist " +
+                                "(M3U) URL below or ask your reseller to add one.",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Red40.copy(alpha = 0.08f))
+                                .padding(16.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = manualUrl,
+                            onValueChange = { manualUrl = it },
+                            label = { Text("Playlist URL") },
+                            placeholder = { Text("http://example.com/get.php?...") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Red40,
+                                cursorColor = Red40
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { viewModel.submitManualPlaylist(manualUrl) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Red40),
+                            enabled = manualUrl.isNotBlank()
+                        ) {
+                            Text(
+                                text = "Continue",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
 

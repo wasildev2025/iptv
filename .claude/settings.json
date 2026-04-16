@@ -6,7 +6,9 @@
       "Bash(npx --prefix apps/web tsc --noEmit -p apps/web)",
       "Bash(echo \"EXIT=$?\")",
       "Bash(git ls-tree *)",
-      "Bash(echo \"API=$?\")"
+      "Bash(echo \"API=$?\")",
+      "Bash(grep -n \"appPlatform\\\\|app_platform\" /home/dev-ai/dev/Akmal/iptv/apps/api/prisma/*.ts)",
+      "Bash(echo \"WEB=$?\")"
     ],
     "additionalDirectories": [
       "/tmp"
