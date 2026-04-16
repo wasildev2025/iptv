@@ -2,6 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# OpenSSL needed for Prisma engine at build-time (prisma generate)
+RUN apk add --no-cache openssl libc6-compat
+
 # Copy everything (relies on .dockerignore to skip node_modules, etc.)
 COPY . .
 
@@ -15,6 +18,9 @@ FROM node:20-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
+
+# OpenSSL needed for Prisma query engine at runtime
+RUN apk add --no-cache openssl libc6-compat
 
 # Copy package files + prisma schema
 COPY package.json package-lock.json ./
