@@ -9,7 +9,7 @@ import type { Device, PaginatedResponse } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MacInput } from "@/components/ui/mac-input";
+import { MacInput, isValidMac } from "@/components/ui/mac-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -126,12 +126,18 @@ export default function ActivatedAppsPage() {
     setEditNotes(device.notes || "");
   };
 
+  const trimmedMac = editMac.trim();
+  const trimmedMacAlt = editMacAlt.trim();
+  const editMacError = trimmedMac && !isValidMac(trimmedMac) ? "Invalid MAC address format" : "";
+  const editMacAltError = trimmedMacAlt && !isValidMac(trimmedMacAlt) ? "Invalid MAC address format" : "";
+  const canSubmitEdit = !!trimmedMac && !editMacError && !editMacAltError;
+
   const submitEdit = () => {
-    if (!editingDevice) return;
+    if (!editingDevice || !canSubmitEdit) return;
     updateMutation.mutate({
       id: editingDevice.id,
-      macAddress: editMac.trim(),
-      macAddressAlt: editMacAlt.trim() || undefined,
+      macAddress: trimmedMac,
+      macAddressAlt: trimmedMacAlt || undefined,
       notes: editNotes.trim() || undefined,
     });
   };
@@ -356,11 +362,11 @@ export default function ActivatedAppsPage() {
           <div className="space-y-4">
             <div>
               <Label className="mb-1.5 block text-xs">MAC Address</Label>
-              <MacInput value={editMac} onChange={setEditMac} />
+              <MacInput value={editMac} onChange={setEditMac} error={editMacError || undefined} />
             </div>
             <div>
               <Label className="mb-1.5 block text-xs">Alternate MAC Address</Label>
-              <MacInput value={editMacAlt} onChange={setEditMacAlt} />
+              <MacInput value={editMacAlt} onChange={setEditMacAlt} error={editMacAltError || undefined} />
             </div>
             <div>
               <Label className="mb-1.5 block text-xs">Remarks</Label>
@@ -372,7 +378,7 @@ export default function ActivatedAppsPage() {
             <Button
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={submitEdit}
-              disabled={updateMutation.isPending}
+              disabled={updateMutation.isPending || !canSubmitEdit}
             >
               {updateMutation.isPending ? "Saving..." : "Save"}
             </Button>

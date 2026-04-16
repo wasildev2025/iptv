@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git show *)",
+      "Read(//tmp/**)",
+      "Bash(npx --prefix apps/web tsc --noEmit -p apps/web)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(git ls-tree *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

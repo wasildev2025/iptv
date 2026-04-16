@@ -15,6 +15,7 @@ import { DevicesService } from './devices.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { BulkActivateDto } from './dto/bulk-activate.dto';
 import { CheckDeviceDto, CheckDeviceMultiAppDto, MultiAppActivateDto } from './dto/check-device.dto';
+import { UpdateDeviceDto } from './dto/update-device.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -142,10 +143,10 @@ export class DevicesController {
     @CurrentUser('id') userId: string,
     @CurrentUser('role') role: string,
     @Param('id') id: string,
-    @Body() body: { macAddress?: string; macAddressAlt?: string; notes?: string },
+    @Body() dto: UpdateDeviceDto,
     @Req() req: any,
   ) {
-    return this.devicesService.updateDevice(userId, id, body, req.ip, role as any);
+    return this.devicesService.updateDevice(userId, id, dto, req.ip, role as any);
   }
 
   @Delete(':id')

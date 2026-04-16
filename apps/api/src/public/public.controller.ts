@@ -1,7 +1,15 @@
-import { Body, Controller, Post, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  NotFoundException,
+  Post,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
+
+const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
 
 @ApiTags('Public')
 @Controller('api/public')
@@ -16,12 +24,18 @@ export class PublicController {
   async checkActivation(
     @Body() body: { macAddress: string; appSlug?: string; appId?: string },
   ) {
-    const mac = body.macAddress?.trim().toUpperCase();
-    if (!mac) {
-      throw new NotFoundException('macAddress is required');
+    const raw = body?.macAddress?.trim();
+    if (!raw) {
+      throw new BadRequestException('macAddress is required');
     }
+    if (!MAC_REGEX.test(raw)) {
+      throw new BadRequestException(
+        'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)',
+      );
+    }
+    const mac = raw.toUpperCase().replace(/-/g, ':');
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       OR: [{ macAddress: mac }, { macAddressAlt: mac }],
     };
 
