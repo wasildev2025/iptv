@@ -12,6 +12,7 @@ import type { App, PaginatedResponse } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MacInput } from "@/components/ui/mac-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -161,21 +162,23 @@ export default function SwitchMacPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Current MAC Address *</Label>
-                <Input
-                  placeholder="AA:BB:CC:DD:EE:FF"
-                  className="font-mono"
+                <MacInput
                   error={form.formState.errors.old_mac?.message}
-                  {...form.register("old_mac")}
+                  value={form.watch("old_mac")}
+                  onChange={(val) =>
+                    form.setValue("old_mac", val, { shouldValidate: true })
+                  }
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label>New MAC Address *</Label>
-                <Input
-                  placeholder="AA:BB:CC:DD:EE:FF"
-                  className="font-mono"
+                <MacInput
                   error={form.formState.errors.new_mac?.message}
-                  {...form.register("new_mac")}
+                  value={form.watch("new_mac")}
+                  onChange={(val) =>
+                    form.setValue("new_mac", val, { shouldValidate: true })
+                  }
                 />
               </div>
             </div>

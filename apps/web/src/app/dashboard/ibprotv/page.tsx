@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MacInput } from "@/components/ui/mac-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -416,10 +417,9 @@ export default function IboProTvPage() {
             </div>
             <div className="space-y-1.5">
               <Label>MAC Address *</Label>
-              <Input
-                placeholder="e.g. 00:1A:2B:3C:4D:5E"
+              <MacInput
                 value={macAddress}
-                onChange={(e) => setMacAddress(e.target.value)}
+                onChange={setMacAddress}
                 required
               />
             </div>

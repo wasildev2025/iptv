@@ -12,6 +12,7 @@ import type { Device, App, PaginatedResponse } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MacInput } from "@/components/ui/mac-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -414,21 +415,23 @@ export default function DevicesPage() {
 
             <div className="space-y-1.5">
               <Label>MAC Address *</Label>
-              <Input
-                placeholder="AA:BB:CC:DD:EE:FF"
-                className="font-mono"
+              <MacInput
                 error={form.formState.errors.macAddress?.message}
-                {...form.register("macAddress")}
+                value={form.watch("macAddress")}
+                onChange={(val) =>
+                  form.setValue("macAddress", val, { shouldValidate: true })
+                }
               />
             </div>
 
             <div className="space-y-1.5">
               <Label>Alternate MAC (optional)</Label>
-              <Input
-                placeholder="AA:BB:CC:DD:EE:00"
-                className="font-mono"
+              <MacInput
                 error={form.formState.errors.macAddressAlt?.message}
-                {...form.register("macAddressAlt")}
+                value={form.watch("macAddressAlt") || ""}
+                onChange={(val) =>
+                  form.setValue("macAddressAlt", val, { shouldValidate: true })
+                }
               />
             </div>
 

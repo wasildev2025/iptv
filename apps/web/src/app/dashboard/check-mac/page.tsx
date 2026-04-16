@@ -12,6 +12,7 @@ import type { App } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MacInput } from "@/components/ui/mac-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -120,11 +121,12 @@ export default function CheckMacPage() {
 
               <div className="space-y-1.5">
                 <Label>MAC Address *</Label>
-                <Input
-                  placeholder="AA:BB:CC:DD:EE:FF"
-                  className="font-mono"
+                <MacInput
                   error={form.formState.errors.macAddress?.message}
-                  {...form.register("macAddress")}
+                  value={form.watch("macAddress")}
+                  onChange={(val) =>
+                    form.setValue("macAddress", val, { shouldValidate: true })
+                  }
                 />
               </div>
             </div>

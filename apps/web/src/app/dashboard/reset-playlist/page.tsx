@@ -8,6 +8,7 @@ import type { App } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MacInput } from "@/components/ui/mac-input";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { RotateCcw, AlertTriangle } from "lucide-react";
@@ -104,12 +105,7 @@ export default function ResetPlaylistPage() {
             </div>
             <div className="space-y-1.5">
               <Label>MAC Address *</Label>
-              <Input
-                placeholder="AA:BB:CC:DD:EE:FF"
-                className="font-mono"
-                value={macAddress}
-                onChange={(e) => setMacAddress(e.target.value)}
-              />
+              <MacInput value={macAddress} onChange={setMacAddress} />
             </div>
           </div>
 

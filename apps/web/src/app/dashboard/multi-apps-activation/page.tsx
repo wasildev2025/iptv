@@ -12,6 +12,7 @@ import type { App, Device } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MacInput } from "@/components/ui/mac-input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -303,11 +304,12 @@ export default function MultiAppsActivationPage() {
                 {/* MAC Address */}
                 <div className="space-y-1.5">
                   <Label>MAC Address *</Label>
-                  <Input
-                    placeholder="AA:BB:CC:DD:EE:FF"
-                    className="font-mono"
+                  <MacInput
                     error={form.formState.errors.macAddress?.message}
-                    {...form.register("macAddress")}
+                    value={form.watch("macAddress")}
+                    onChange={(val) =>
+                      form.setValue("macAddress", val, { shouldValidate: true })
+                    }
                   />
                 </div>
 

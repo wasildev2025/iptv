@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import api from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import type { Device, App, PaginatedResponse } from "@/types";
+import type { Device, PaginatedResponse } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MacInput } from "@/components/ui/mac-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableHeader,
@@ -21,11 +24,19 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Search,
   Monitor,
   ChevronLeft,
   ChevronRight,
-  Calendar,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, "success" | "destructive" | "warning" | "secondary"> = {
@@ -36,6 +47,8 @@ const STATUS_COLORS: Record<string, "success" | "destructive" | "warning" | "sec
 };
 
 export default function ActivatedAppsPage() {
+  const queryClient = useQueryClient();
+
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState("");
@@ -43,6 +56,13 @@ export default function ActivatedAppsPage() {
   const [searchField, setSearchField] = useState("general");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
+  const [editMac, setEditMac] = useState("");
+  const [editMacAlt, setEditMacAlt] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+
+  const [deletingDevice, setDeletingDevice] = useState<Device | null>(null);
 
   const { data: devicesData, isLoading } = useQuery<PaginatedResponse<Device>>({
     queryKey: ["activated-apps", page, limit, search, searchField, startDate, endDate],
@@ -58,9 +78,31 @@ export default function ActivatedAppsPage() {
     },
   });
 
-  const { data: apps } = useQuery<App[]>({
-    queryKey: ["apps"],
-    queryFn: async () => (await api.get("/apps")).data,
+  const updateMutation = useMutation({
+    mutationFn: async (payload: { id: string; macAddress: string; macAddressAlt?: string; notes?: string }) => {
+      const { id, ...body } = payload;
+      return (await api.patch(`/devices/${id}`, body)).data;
+    },
+    onSuccess: () => {
+      toast.success("Activation updated");
+      queryClient.invalidateQueries({ queryKey: ["activated-apps"] });
+      setEditingDevice(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || "Update failed");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/devices/${id}`)).data,
+    onSuccess: () => {
+      toast.success("Activation deleted");
+      queryClient.invalidateQueries({ queryKey: ["activated-apps"] });
+      setDeletingDevice(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || "Delete failed");
+    },
   });
 
   const handleSearch = () => {
@@ -75,6 +117,23 @@ export default function ActivatedAppsPage() {
     setStartDate("");
     setEndDate("");
     setPage(1);
+  };
+
+  const openEdit = (device: Device) => {
+    setEditingDevice(device);
+    setEditMac(device.macAddress);
+    setEditMacAlt(device.macAddressAlt || "");
+    setEditNotes(device.notes || "");
+  };
+
+  const submitEdit = () => {
+    if (!editingDevice) return;
+    updateMutation.mutate({
+      id: editingDevice.id,
+      macAddress: editMac.trim(),
+      macAddressAlt: editMacAlt.trim() || undefined,
+      notes: editNotes.trim() || undefined,
+    });
   };
 
   return (
@@ -189,6 +248,7 @@ export default function ActivatedAppsPage() {
                       <TableHead>Remarks</TableHead>
                       <TableHead>Platform</TableHead>
                       <TableHead>Activated On</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -201,7 +261,7 @@ export default function ActivatedAppsPage() {
                           <span className="font-mono text-sm">{device.macAddress}</span>
                         </TableCell>
                         <TableCell className="text-sm">
-                          {(device as any).activatedBy || "---"}
+                          {device.user?.name || device.user?.email || "---"}
                         </TableCell>
                         <TableCell className="text-sm">
                           <div className="flex items-center gap-1">
@@ -212,18 +272,39 @@ export default function ActivatedAppsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm font-medium">
-                          {(device as any).creditUsed ?? ((device.packageType === "yearly" ? device.app?.creditsYearly : device.app?.creditsLifetime) || "---")}
+                          {(device.packageType === "yearly" ? device.app?.creditsYearly : device.app?.creditsLifetime) || "---"}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate">
                           {device.notes || "---"}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-xs">
-                            {(device as any).platform || device.packageType}
+                            {device.packageType}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {formatDate(device.activatedAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEdit(device)}
+                              title="Edit"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => setDeletingDevice(device)}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -265,6 +346,63 @@ export default function ActivatedAppsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit dialog */}
+      <Dialog open={!!editingDevice} onOpenChange={(open) => !open && setEditingDevice(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Activation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-1.5 block text-xs">MAC Address</Label>
+              <MacInput value={editMac} onChange={setEditMac} />
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-xs">Alternate MAC Address</Label>
+              <MacInput value={editMacAlt} onChange={setEditMacAlt} />
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-xs">Remarks</Label>
+              <Textarea rows={3} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingDevice(null)}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={submitEdit}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deletingDevice} onOpenChange={(open) => !open && setDeletingDevice(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Activation?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently remove the activation for{" "}
+            <span className="font-mono">{deletingDevice?.macAddress}</span> on{" "}
+            <span className="font-medium">{deletingDevice?.app?.name}</span>. This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingDevice(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingDevice && deleteMutation.mutate(deletingDevice.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

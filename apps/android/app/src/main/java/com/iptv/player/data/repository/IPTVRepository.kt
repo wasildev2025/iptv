@@ -33,10 +33,9 @@ class IPTVRepository @Inject constructor(
         }
     }
 
-    suspend fun getApps(macAddress: String): Result<List<AppInfo>> {
+    suspend fun getApps(macAddress: String = ""): Result<List<AppInfo>> {
         return try {
-            // Use getAllowedApps with MAC address to filter apps specifically for this device
-            val response = api.getAllowedApps(macAddress)
+            val response = api.getApps()
             if (response.isSuccessful) Result.success(response.body() ?: emptyList())
             else Result.failure(Exception("Failed to fetch apps"))
         } catch (e: Exception) {

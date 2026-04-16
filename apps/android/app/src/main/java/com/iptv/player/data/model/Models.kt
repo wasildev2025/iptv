@@ -24,7 +24,8 @@ data class AppInfo(
 
 data class ActivationRequest(
     val macAddress: String,
-    val appId: String
+    val appId: String? = null,
+    val appSlug: String? = null
 )
 
 data class PlaylistResponse(

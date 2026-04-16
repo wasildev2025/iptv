@@ -22,6 +22,7 @@ export interface Device {
   notes?: string;
   playlistUrl?: string;
   createdAt: string;
+  user?: { id: string; name: string; email: string };
 }
 
 export interface App {

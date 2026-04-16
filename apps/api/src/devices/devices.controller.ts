@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -134,6 +135,17 @@ export class DevicesController {
     @Req() req: any,
   ) {
     return this.devicesService.toggleStatus(userId, id, false, req.ip, role as any);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+    @Param('id') id: string,
+    @Body() body: { macAddress?: string; macAddressAlt?: string; notes?: string },
+    @Req() req: any,
+  ) {
+    return this.devicesService.updateDevice(userId, id, body, req.ip, role as any);
   }
 
   @Delete(':id')

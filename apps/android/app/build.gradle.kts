@@ -16,7 +16,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "API_BASE_URL", "\"https://iptv-3of2.onrender.com/api\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://p01--iptv--bqkrbn49pvfd.code.run/api\"")
     }
 
     buildFeatures {

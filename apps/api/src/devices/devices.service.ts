@@ -423,6 +423,74 @@ export class DevicesService {
     return updated;
   }
 
+  async updateDevice(
+    userId: string,
+    id: string,
+    data: { macAddress?: string; macAddressAlt?: string; notes?: string },
+    ipAddress?: string,
+    role?: UserRole,
+  ) {
+    const device = await this.findOne(userId, id, role);
+
+    const macNormalized = data.macAddress?.trim().toUpperCase();
+    const macAltNormalized = data.macAddressAlt?.trim().toUpperCase() || null;
+
+    if (macNormalized && macNormalized !== device.macAddress) {
+      const conflict = await this.prisma.device.findFirst({
+        where: {
+          macAddress: macNormalized,
+          appId: device.appId,
+          id: { not: id },
+        },
+      });
+      if (conflict) {
+        throw new BadRequestException(
+          `Another device is already registered with MAC ${macNormalized} for this app`,
+        );
+      }
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.device.update({
+        where: { id },
+        data: {
+          ...(macNormalized ? { macAddress: macNormalized } : {}),
+          ...(data.macAddressAlt !== undefined ? { macAddressAlt: macAltNormalized } : {}),
+          ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
+        },
+        include: {
+          app: { select: { id: true, name: true, slug: true, iconUrl: true } },
+          user: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId,
+          action: 'device.update',
+          ipAddress: ipAddress || '',
+          details: {
+            deviceId: id,
+            before: {
+              macAddress: device.macAddress,
+              macAddressAlt: device.macAddressAlt,
+              notes: device.notes,
+            },
+            after: {
+              macAddress: result.macAddress,
+              macAddressAlt: result.macAddressAlt,
+              notes: result.notes,
+            },
+          },
+        },
+      });
+
+      return result;
+    });
+
+    return updated;
+  }
+
   async remove(userId: string, id: string, ipAddress?: string, role?: UserRole) {
     const device = await this.findOne(userId, id, role);
 
