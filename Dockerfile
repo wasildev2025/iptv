@@ -2,19 +2,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy workspace root files
-COPY package.json package-lock.json ./
-COPY apps/api/package.json ./apps/api/
-COPY apps/api/prisma ./apps/api/prisma
+# Copy everything (relies on .dockerignore to skip node_modules, etc.)
+COPY . .
 
-# Install all deps (including dev) for build
-RUN npm install --include=dev
-
-# Copy API source
-COPY apps/api ./apps/api
-
-# Build
-RUN npm run build --workspace=apps/api
+# Install all deps (including dev) and build API
+RUN npm install --include=dev \
+  && npm run build --workspace=apps/api
 
 # --- Production image ---
 FROM node:20-alpine
@@ -23,15 +16,16 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy package files and install production deps only
+# Copy package files + prisma schema
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/api/prisma ./apps/api/prisma
 
+# Install production deps only, generate Prisma client
 RUN npm install --omit=dev --workspace=apps/api --include-workspace-root \
-  && npx --prefix apps/api prisma generate --schema=apps/api/prisma/schema.prisma
+  && cd apps/api && npx prisma generate
 
-# Copy built output
+# Copy built output from builder stage
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 EXPOSE 4000
