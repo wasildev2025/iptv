@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SavePlaylistDto } from './dto/save-playlist.dto';
 import { ResetPlaylistDto } from './dto/reset-playlist.dto';
 import { ChangeDomainDto } from './dto/change-domain.dto';
+import { UpdatePlaylistDto } from './dto/update-playlist.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -229,7 +230,6 @@ export class PlaylistsService {
   }
 
   async checkStatus(userId: string, macAddress: string, appId: string) {
-    // Check if device exists and belongs to the user
     const device = await this.prisma.device.findFirst({
       where: {
         macAddress,
@@ -247,7 +247,6 @@ export class PlaylistsService {
       );
     }
 
-    // Get existing playlists for this device
     const playlists = await this.prisma.playlist.findMany({
       where: {
         macAddress,
@@ -258,8 +257,104 @@ export class PlaylistsService {
     });
 
     return {
-      device,
-      playlists,
+      found: true,
+      macAddress: device.macAddress,
+      appId: device.appId,
+      appName: device.app.name,
+      status: device.status,
+      expiresAt: device.expiresAt ?? undefined,
+      playlists: playlists.map((p) => ({
+        id: p.id,
+        name: p.playlistName,
+        url: p.playlistUrl,
+        xmlUrl: p.xmlUrl || '',
+        isProtected: p.isProtected,
+        createdAt: p.createdAt,
+      })),
     };
+  }
+
+  async update(userId: string, id: string, dto: UpdatePlaylistDto) {
+    const existing = await this.prisma.playlist.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Playlist not found');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.playlist.update({
+        where: { id },
+        data: {
+          playlistUrl: dto.playlistUrl ?? undefined,
+          playlistName: dto.playlistName ?? undefined,
+          xmlUrl: dto.xmlUrl ?? undefined,
+          pin: dto.pin ?? undefined,
+          isProtected: dto.isProtected ?? undefined,
+        },
+      });
+
+      if (dto.playlistUrl && dto.playlistUrl !== existing.playlistUrl) {
+        await tx.device.updateMany({
+          where: {
+            userId,
+            macAddress: existing.macAddress,
+            appId: existing.appId,
+            playlistUrl: existing.playlistUrl,
+          },
+          data: { playlistUrl: dto.playlistUrl },
+        });
+      }
+
+      return next;
+    });
+
+    this.logger.log(
+      `Playlist ${id} updated by user ${userId} (device ${existing.macAddress})`,
+    );
+
+    return updated;
+  }
+
+  async remove(userId: string, id: string) {
+    const existing = await this.prisma.playlist.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Playlist not found');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.playlist.delete({ where: { id } });
+
+      // If the device was pointing at this playlist, fall back to the next most
+      // recent playlist for the same device (or clear it if none left).
+      const remaining = await tx.playlist.findFirst({
+        where: {
+          userId,
+          macAddress: existing.macAddress,
+          appId: existing.appId,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      await tx.device.updateMany({
+        where: {
+          userId,
+          macAddress: existing.macAddress,
+          appId: existing.appId,
+          playlistUrl: existing.playlistUrl,
+        },
+        data: { playlistUrl: remaining?.playlistUrl ?? null },
+      });
+    });
+
+    this.logger.log(
+      `Playlist ${id} deleted by user ${userId} (device ${existing.macAddress})`,
+    );
+
+    return { message: 'Playlist deleted successfully' };
   }
 }

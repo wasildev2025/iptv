@@ -33,6 +33,10 @@ export interface App {
   creditsYearly: number;
   creditsLifetime: number;
   isActive: boolean;
+  downloaderCode?: string;
+  apkUrl?: string;
+  apkVersion?: string;
+  packageName?: string;
   _count?: { devices: number };
 }
 

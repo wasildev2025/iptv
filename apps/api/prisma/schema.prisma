@@ -136,6 +136,10 @@ model App {
   creditsYearly   Int      @default(1) @map("credits_yearly")
   creditsLifetime Int      @default(2) @map("credits_lifetime")
   isActive        Boolean  @default(true) @map("is_active")
+  downloaderCode  String   @default("") @map("downloader_code")
+  apkUrl          String   @default("") @map("apk_url")
+  apkVersion      String   @default("") @map("apk_version")
+  packageName     String   @default("") @map("package_name")
   createdAt       DateTime @default(now()) @map("created_at")
 
   devices   Device[]

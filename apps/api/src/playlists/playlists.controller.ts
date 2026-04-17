@@ -2,7 +2,10 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Body,
+  Param,
   Query,
   Req,
   UseGuards,
@@ -12,6 +15,7 @@ import { PlaylistsService } from './playlists.service';
 import { SavePlaylistDto } from './dto/save-playlist.dto';
 import { ResetPlaylistDto } from './dto/reset-playlist.dto';
 import { ChangeDomainDto } from './dto/change-domain.dto';
+import { UpdatePlaylistDto } from './dto/update-playlist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { EmailVerifiedGuard } from '../auth/guards/email-verified.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -68,8 +72,25 @@ export class PlaylistsController {
   checkStatus(
     @CurrentUser('id') userId: string,
     @Body('macAddress') macAddress: string,
-    @Body('app_id') appId: string,
+    @Body('appId') appId: string,
   ) {
     return this.playlistsService.checkStatus(userId, macAddress, appId);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdatePlaylistDto,
+  ) {
+    return this.playlistsService.update(userId, id, dto);
+  }
+
+  @Delete(':id')
+  remove(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.playlistsService.remove(userId, id);
   }
 }

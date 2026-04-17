@@ -1,4 +1,13 @@
-import { IsString, IsInt, Min, IsOptional, IsUrl, IsBoolean, Matches } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  Min,
+  IsOptional,
+  IsUrl,
+  IsBoolean,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAppDto {
@@ -30,4 +39,29 @@ export class CreateAppDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ example: '123456', description: 'Downloader app code (AFTV)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  downloaderCode?: string;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/app.apk' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  @IsUrl({ require_tld: false }, { message: 'Invalid APK URL' })
+  apkUrl?: string;
+
+  @ApiPropertyOptional({ example: '1.4.2' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  apkVersion?: string;
+
+  @ApiPropertyOptional({ example: 'com.iptv.player' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  packageName?: string;
 }

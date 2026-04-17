@@ -44,11 +44,34 @@ export class AppsService {
 
   // APK download plans (app list with download info for the Download APK page)
   async getApkPlans() {
-    return this.prisma.app.findMany({
-      where: { isActive: true },
+    const apps = await this.prisma.app.findMany({
+      where: {
+        isActive: true,
+        NOT: { apkUrl: '' },
+      },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, slug: true, iconUrl: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        iconUrl: true,
+        downloaderCode: true,
+        apkUrl: true,
+        apkVersion: true,
+        packageName: true,
+      },
     });
+
+    return apps.map((a) => ({
+      id: a.id,
+      appName: a.name,
+      appSlug: a.slug,
+      iconUrl: a.iconUrl,
+      downloaderCode: a.downloaderCode,
+      apkUrl: a.apkUrl,
+      version: a.apkVersion || undefined,
+      packageName: a.packageName || undefined,
+    }));
   }
 
   async findOne(id: string) {
@@ -82,6 +105,10 @@ export class AppsService {
         creditsYearly: dto.creditsYearly,
         creditsLifetime: dto.creditsLifetime,
         isActive: dto.isActive ?? true,
+        downloaderCode: dto.downloaderCode || '',
+        apkUrl: dto.apkUrl || '',
+        apkVersion: dto.apkVersion || '',
+        packageName: dto.packageName || '',
       },
     });
   }

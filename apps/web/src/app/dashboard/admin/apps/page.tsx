@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -60,6 +60,10 @@ interface AppFormData {
   iconUrl: string;
   creditsYearly: number;
   creditsLifetime: number;
+  downloaderCode: string;
+  apkUrl: string;
+  apkVersion: string;
+  packageName: string;
 }
 
 const initialFormData: AppFormData = {
@@ -68,6 +72,10 @@ const initialFormData: AppFormData = {
   iconUrl: "",
   creditsYearly: 0,
   creditsLifetime: 0,
+  downloaderCode: "",
+  apkUrl: "",
+  apkVersion: "",
+  packageName: "",
 };
 
 export default function AdminAppsPage() {
@@ -99,6 +107,10 @@ export default function AdminAppsPage() {
         iconUrl: data.iconUrl || undefined,
         creditsYearly: data.creditsYearly,
         creditsLifetime: data.creditsLifetime,
+        downloaderCode: data.downloaderCode || undefined,
+        apkUrl: data.apkUrl || undefined,
+        apkVersion: data.apkVersion || undefined,
+        packageName: data.packageName || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-apps"] });
@@ -120,6 +132,10 @@ export default function AdminAppsPage() {
         iconUrl: data.iconUrl || undefined,
         creditsYearly: data.creditsYearly,
         creditsLifetime: data.creditsLifetime,
+        downloaderCode: data.downloaderCode ?? "",
+        apkUrl: data.apkUrl || undefined,
+        apkVersion: data.apkVersion ?? "",
+        packageName: data.packageName ?? "",
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-apps"] });
@@ -172,6 +188,10 @@ export default function AdminAppsPage() {
       iconUrl: app.iconUrl || "",
       creditsYearly: app.creditsYearly,
       creditsLifetime: app.creditsLifetime,
+      downloaderCode: app.downloaderCode || "",
+      apkUrl: app.apkUrl || "",
+      apkVersion: app.apkVersion || "",
+      packageName: app.packageName || "",
     });
     setAutoSlug(false);
     setEditOpen(true);
@@ -268,6 +288,57 @@ export default function AdminAppsPage() {
             }
             required
           />
+        </div>
+      </div>
+
+      <div className="pt-2 border-t">
+        <p className="text-sm font-semibold mb-3">APK Download (optional)</p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Fill these to expose this app on the public Download APK page.
+        </p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Downloader Code</Label>
+              <Input
+                placeholder="123456"
+                value={formData.downloaderCode}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, downloaderCode: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>APK Version</Label>
+              <Input
+                placeholder="1.4.2"
+                value={formData.apkVersion}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, apkVersion: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>APK URL</Label>
+            <Input
+              placeholder="https://cdn.example.com/app.apk"
+              value={formData.apkUrl}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, apkUrl: e.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Package Name</Label>
+            <Input
+              placeholder="com.iptv.player"
+              value={formData.packageName}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, packageName: e.target.value }))
+              }
+            />
+          </div>
         </div>
       </div>
     </>
