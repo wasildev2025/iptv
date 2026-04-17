@@ -8,7 +8,8 @@
       "Bash(git ls-tree *)",
       "Bash(echo \"API=$?\")",
       "Bash(grep -n \"appPlatform\\\\|app_platform\" /home/dev-ai/dev/Akmal/iptv/apps/api/prisma/*.ts)",
-      "Bash(echo \"WEB=$?\")"
+      "Bash(echo \"WEB=$?\")",
+      "WebFetch(domain:github.com)"
     ],
     "additionalDirectories": [
       "/tmp"

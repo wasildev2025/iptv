@@ -30,7 +30,8 @@ object M3UParser {
 
                 if (i < lines.size) {
                     val streamUrl = lines[i].trim()
-                    if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("rtmp") || streamUrl.startsWith("rtsp"))) {
+                    // Skip rtsp:// — ExoPlayer's DefaultHttpDataSource can't play it without RtspMediaSource.
+                    if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("rtmp"))) {
                         val isLive = !groupTitle.contains("VOD", ignoreCase = true) &&
                                     !groupTitle.contains("Movie", ignoreCase = true) &&
                                     !groupTitle.contains("Series", ignoreCase = true)

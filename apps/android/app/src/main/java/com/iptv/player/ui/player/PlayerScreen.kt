@@ -2,6 +2,7 @@ package com.iptv.player.ui.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -66,8 +67,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.iptv.player.ui.theme.Red40
@@ -114,21 +116,22 @@ fun PlayerScreen(
 
     // ExoPlayer setup
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri(streamUrl)
+        val userAgent = Util.getUserAgent(context, "IPTVPlayer")
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(userAgent)
+            .setAllowCrossProtocolRedirects(true)
+        
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(httpDataSourceFactory)
 
-            if (streamUrl.contains(".m3u8", ignoreCase = true)) {
-                val hlsSource = HlsMediaSource.Factory(
-                    androidx.media3.datasource.DefaultDataSource.Factory(context)
-                ).createMediaSource(mediaItem)
-                setMediaSource(hlsSource)
-            } else {
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build().apply {
+                val mediaItem = MediaItem.fromUri(streamUrl)
                 setMediaItem(mediaItem)
+                playWhenReady = true
+                prepare()
             }
-
-            playWhenReady = true
-            prepare()
-        }
     }
 
     // Player listener
@@ -152,9 +155,21 @@ fun PlayerScreen(
 
             override fun onPlayerError(error: PlaybackException) {
                 isBuffering = false
-                viewModel.onPlayerError(
-                    error.localizedMessage ?: "Playback error occurred"
+                Log.e(
+                    "PlayerScreen",
+                    "Playback failed [code=${error.errorCode} ${error.errorCodeName}] url=$streamUrl channel=$channelName",
+                    error
                 )
+                val message = when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> {
+                        "Server error (404/500). The stream might be offline."
+                    }
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED -> {
+                        "Network connection failed."
+                    }
+                    else -> error.localizedMessage ?: "Playback error occurred"
+                }
+                viewModel.onPlayerError(message)
             }
         }
         exoPlayer.addListener(listener)
@@ -234,7 +249,8 @@ fun PlayerScreen(
                     Text(
                         text = playerError ?: "",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = Color.White.copy(alpha = 0.7f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {

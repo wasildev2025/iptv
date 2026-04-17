@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 
 @HiltViewModel
@@ -20,21 +18,12 @@ class PlayerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    val streamUrl: String = savedStateHandle.get<String>("streamUrl")?.let {
-        URLDecoder.decode(it, StandardCharsets.UTF_8.toString())
-    } ?: ""
-
-    val channelName: String = savedStateHandle.get<String>("channelName")?.let {
-        URLDecoder.decode(it, StandardCharsets.UTF_8.toString())
-    } ?: ""
-
-    val groupTitle: String = savedStateHandle.get<String>("groupTitle")?.let {
-        URLDecoder.decode(it, StandardCharsets.UTF_8.toString())
-    } ?: ""
-
-    val logoUrl: String = savedStateHandle.get<String>("logoUrl")?.let {
-        URLDecoder.decode(it, StandardCharsets.UTF_8.toString())
-    } ?: ""
+    // Note: Navigation component automatically decodes path parameters, 
+    // so we don't need to call URLDecoder.decode manually here.
+    val streamUrl: String = savedStateHandle.get<String>("streamUrl") ?: ""
+    val channelName: String = savedStateHandle.get<String>("channelName") ?: ""
+    val groupTitle: String = savedStateHandle.get<String>("groupTitle") ?: ""
+    val logoUrl: String = savedStateHandle.get<String>("logoUrl") ?: ""
 
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
