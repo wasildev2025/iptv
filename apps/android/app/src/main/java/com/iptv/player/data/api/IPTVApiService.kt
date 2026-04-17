@@ -1,8 +1,12 @@
 package com.iptv.player.data.api
 
-import com.iptv.player.data.model.*
+import com.iptv.player.data.model.ActivationRequest
+import com.iptv.player.data.model.AppInfo
+import com.iptv.player.data.model.AppsListRequest
+import com.iptv.player.data.model.DeviceCheckResponse
 import retrofit2.Response
-import retrofit2.http.*
+import retrofit2.http.Body
+import retrofit2.http.POST
 
 interface IPTVApiService {
     // Public activation check — no auth required
@@ -15,6 +19,6 @@ interface IPTVApiService {
     // for that MAC are returned.
     @POST("public/apps")
     suspend fun getApps(
-        @Body request: AppsListRequest = AppsListRequest()
+        @Body request: AppsListRequest
     ): Response<List<AppInfo>>
 }

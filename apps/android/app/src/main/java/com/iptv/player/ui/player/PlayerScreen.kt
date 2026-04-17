@@ -68,12 +68,16 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.PlayerView
 import com.iptv.player.ui.theme.Red40
 import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
+import androidx.media3.ui.PlayerView
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -116,13 +120,20 @@ fun PlayerScreen(
 
     // ExoPlayer setup
     val exoPlayer = remember {
-        val userAgent = Util.getUserAgent(context, "IPTVPlayer")
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(userAgent)
-            .setAllowCrossProtocolRedirects(true)
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .build()
+
+        val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(
+            context,
+            OkHttpDataSource.Factory(okHttpClient)
+                .setUserAgent(Util.getUserAgent(context, "IPTVPlayer"))
+        )
         
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(httpDataSourceFactory)
+            .setDataSourceFactory(dataSourceFactory)
 
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -165,9 +176,15 @@ fun PlayerScreen(
                         "Server error (404/500). The stream might be offline."
                     }
                     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED -> {
-                        "Network connection failed."
+                        "Network connection failed. Check your internet."
                     }
-                    else -> error.localizedMessage ?: "Playback error occurred"
+                    PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED -> {
+                        "Cleartext HTTP traffic not permitted."
+                    }
+                    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE -> {
+                        "Invalid content type. Unsupported stream format."
+                    }
+                    else -> "Failed to connect to stream. The server might be unreachable."
                 }
                 viewModel.onPlayerError(message)
             }

@@ -31,7 +31,13 @@ object M3UParser {
                 if (i < lines.size) {
                     val streamUrl = lines[i].trim()
                     // Skip rtsp:// — ExoPlayer's DefaultHttpDataSource can't play it without RtspMediaSource.
-                    if (streamUrl.isNotEmpty() && (streamUrl.startsWith("http") || streamUrl.startsWith("rtmp"))) {
+                    // Skip youtube.com / youtu.be — those are HTML pages, not playable streams (resolving
+                    // the underlying signed media URL requires a YouTube extractor).
+                    val isPlayable = streamUrl.isNotEmpty() &&
+                        (streamUrl.startsWith("http") || streamUrl.startsWith("rtmp")) &&
+                        !streamUrl.contains("youtube.com", ignoreCase = true) &&
+                        !streamUrl.contains("youtu.be", ignoreCase = true)
+                    if (isPlayable) {
                         val isLive = !groupTitle.contains("VOD", ignoreCase = true) &&
                                     !groupTitle.contains("Movie", ignoreCase = true) &&
                                     !groupTitle.contains("Series", ignoreCase = true)
