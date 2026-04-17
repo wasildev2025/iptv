@@ -65,14 +65,33 @@ function DropdownMenuContent({
   children: React.ReactNode;
 }) {
   const ctx = React.useContext(DropdownContext);
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const [placement, setPlacement] = React.useState<"bottom" | "top">("bottom");
+
+  React.useLayoutEffect(() => {
+    if (!ctx?.open || !ref.current) return;
+    const el = ref.current;
+    const rect = el.getBoundingClientRect();
+    const triggerRect = el.parentElement?.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - (triggerRect?.bottom ?? 0);
+    const spaceAbove = triggerRect?.top ?? 0;
+    if (spaceBelow < rect.height + 8 && spaceAbove > rect.height + 8) {
+      setPlacement("top");
+    } else {
+      setPlacement("bottom");
+    }
+  }, [ctx?.open]);
+
   if (!ctx) throw new Error("DropdownMenuContent must be inside DropdownMenu");
   if (!ctx.open) return null;
 
   return (
     <div
+      ref={ref}
       className={cn(
-        "absolute z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border bg-background p-1 shadow-md animate-in fade-in-0 zoom-in-95",
+        "absolute z-50 min-w-[8rem] overflow-hidden rounded-md border bg-background p-1 shadow-md animate-in fade-in-0 zoom-in-95",
         align === "end" ? "right-0" : "left-0",
+        placement === "bottom" ? "top-full mt-1" : "bottom-full mb-1",
         className
       )}
       onClick={(e) => e.stopPropagation()}
