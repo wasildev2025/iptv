@@ -149,9 +149,13 @@ class IPTVRepository @Inject constructor(
                 ?: throw Exception("No EPG feed configured for this playlist")
 
             if (isXtreamPlaylistUrl(playlistUrl)) {
-                loadXtreamEpgChannels(playlistUrl).getOrThrow().let { channels ->
-                    replaceChannelCache(channels)
-                }
+                val guideChannels = loadXtreamEpgChannels(playlistUrl).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        loadPlaylist(playlistUrl).getOrThrow().channels
+                    }
+                )
+                replaceChannelCache(guideChannels)
             }
 
             val now = System.currentTimeMillis()

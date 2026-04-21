@@ -112,10 +112,12 @@ class HomeViewModel @Inject constructor(
                     _loadingProgress.value = 0.7f
                     _xtreamHome.value = home
                 }.onFailure { e ->
-                    _isLoading.value = false
-                    _feedState.value = _feedState.value.copy(
-                        error = e.message ?: "Failed to load Xtream catalogue"
-                    )
+                    viewModelScope.launch {
+                        loadDirectPlaylistFallback(
+                            playlistUrl = playlistUrl,
+                            fallbackReason = e.message ?: "Xtream proxy unavailable"
+                        )
+                    }
                 }
                 return@launch
             }
@@ -133,6 +135,31 @@ class HomeViewModel @Inject constructor(
                     error = e.message ?: "Failed to load playlist"
                 )
             }
+        }
+    }
+
+    private suspend fun loadDirectPlaylistFallback(
+        playlistUrl: String,
+        fallbackReason: String
+    ) {
+        _isXtreamMode.value = false
+        _xtreamHome.value = null
+        _allChannels.value = emptyList()
+        _loadingProgress.value = 0.2f
+
+        val fallbackResult = repository.loadPlaylist(playlistUrl)
+        fallbackResult.onSuccess { playlist ->
+            _loadingProgress.value = 0.5f
+            _allChannels.value = playlist.channels
+        }.onFailure { fallbackError ->
+            _isLoading.value = false
+            _feedState.value = _feedState.value.copy(
+                error = buildString {
+                    append(fallbackReason)
+                    append(". ")
+                    append(fallbackError.message ?: "Failed to load playlist")
+                }
+            )
         }
     }
 
@@ -258,7 +285,15 @@ class HomeViewModel @Inject constructor(
             if (_isXtreamMode.value) {
                 repository.searchXtreamChannels(_activePlaylistUrl.value, query)
                     .onSuccess { results -> _searchResults.value = results }
-                    .onFailure { _searchResults.value = emptyList() }
+                    .onFailure {
+                        val directChannels = ensureDirectFallbackChannelsLoaded()
+                        _searchResults.value = withContext(Dispatchers.Default) {
+                            directChannels.filter { channel ->
+                                channel.name.contains(query, ignoreCase = true) ||
+                                    channel.groupTitle.contains(query, ignoreCase = true)
+                            }
+                        }
+                    }
             } else {
                 _searchResults.value = withContext(Dispatchers.Default) {
                     _allChannels.value.filter { channel ->
@@ -268,6 +303,25 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private suspend fun ensureDirectFallbackChannelsLoaded(): List<M3UChannel> {
+        if (!_isXtreamMode.value && _allChannels.value.isNotEmpty()) {
+            return _allChannels.value
+        }
+
+        val fallbackResult = repository.loadPlaylist(_activePlaylistUrl.value)
+        return fallbackResult.fold(
+            onSuccess = { playlist ->
+                _isXtreamMode.value = false
+                _xtreamHome.value = null
+                _allChannels.value = playlist.channels
+                playlist.channels
+            },
+            onFailure = {
+                emptyList()
+            }
+        )
     }
 
     fun toggleSearch() {
