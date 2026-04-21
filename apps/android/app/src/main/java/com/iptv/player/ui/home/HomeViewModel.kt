@@ -1,5 +1,6 @@
 package com.iptv.player.ui.home
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iptv.player.data.model.FavoriteChannel
@@ -9,27 +10,29 @@ import com.iptv.player.data.repository.IPTVRepository
 import com.iptv.player.util.ConnectionState
 import com.iptv.player.util.NetworkObserver
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+@Immutable
 sealed class HomeFeedItem {
+    @Immutable
     data class Hero(val channel: M3UChannel) : HomeFeedItem()
+    @Immutable
     data class SectionHeader(val title: String) : HomeFeedItem()
+    @Immutable
     data class ContinueWatchingRow(val channels: List<RecentChannel>) : HomeFeedItem()
+    @Immutable
     data class CategoryRow(val title: String, val channels: List<M3UChannel>) : HomeFeedItem()
+    @Immutable
     data class ChannelGrid(val title: String, val channels: List<M3UChannel>) : HomeFeedItem()
 }
 
+@Immutable
 data class HomeUiState(
-    val isLoading: Boolean = true,
     val error: String? = null,
     val feedItems: List<HomeFeedItem> = emptyList(),
     val channelCount: Int = 0
@@ -42,8 +45,14 @@ class HomeViewModel @Inject constructor(
     private val networkObserver: NetworkObserver
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _loadingProgress = MutableStateFlow(0f)
+    val loadingProgress: StateFlow<Float> = _loadingProgress.asStateFlow()
+
+    private val _feedState = MutableStateFlow(HomeUiState())
+    val feedState: StateFlow<HomeUiState> = _feedState.asStateFlow()
 
     private val _allChannels = MutableStateFlow<List<M3UChannel>>(emptyList())
 
@@ -62,9 +71,11 @@ class HomeViewModel @Inject constructor(
             if (query.isBlank()) {
                 emptyList()
             } else {
-                channels.filter { channel ->
-                    channel.name.contains(query, ignoreCase = true) ||
-                            channel.groupTitle.contains(query, ignoreCase = true)
+                withContext(Dispatchers.Default) {
+                    channels.filter { channel ->
+                        channel.name.contains(query, ignoreCase = true) ||
+                                channel.groupTitle.contains(query, ignoreCase = true)
+                    }
                 }
             }
         }
@@ -78,15 +89,19 @@ class HomeViewModel @Inject constructor(
 
     fun loadPlaylist(playlistUrl: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _isLoading.value = true
+            _loadingProgress.value = 0.1f
+            _feedState.value = _feedState.value.copy(error = null)
+            
             val result = repository.loadPlaylist(playlistUrl)
             result.onSuccess { playlist ->
+                _loadingProgress.value = 0.5f
                 val channels = playlist.channels
                 _allChannels.value = channels
                 buildHomeFeed(channels)
             }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                _isLoading.value = false
+                _feedState.value = _feedState.value.copy(
                     error = e.message ?: "Failed to load playlist"
                 )
             }
@@ -95,25 +110,28 @@ class HomeViewModel @Inject constructor(
 
     private fun buildHomeFeed(channels: List<M3UChannel>) {
         viewModelScope.launch {
-            combine(recentChannels, favorites) { recents, favs ->
-                val feedItems = mutableListOf<HomeFeedItem>()
+            _loadingProgress.value = 0.6f
+            
+            val feedItems = withContext(Dispatchers.Default) {
+                val items = mutableListOf<HomeFeedItem>()
+                val recents = recentChannels.first()
+                val favs = favorites.first()
 
-                // 1. Hero Section (Pick a random popular channel or first favorite)
+                // 1. Hero Section
                 val heroChannel = favs.firstOrNull()?.let { f ->
                     channels.find { it.streamUrl == f.streamUrl }
                 } ?: channels.firstOrNull()
 
-                heroChannel?.let {
-                    feedItems.add(HomeFeedItem.Hero(it))
-                }
+                heroChannel?.let { items.add(HomeFeedItem.Hero(it)) }
+                _loadingProgress.value = 0.7f
 
                 // 2. Continue Watching
                 if (recents.isNotEmpty()) {
-                    feedItems.add(HomeFeedItem.SectionHeader("Continue Watching"))
-                    feedItems.add(HomeFeedItem.ContinueWatchingRow(recents.take(10)))
+                    items.add(HomeFeedItem.SectionHeader("Continue Watching"))
+                    items.add(HomeFeedItem.ContinueWatchingRow(recents.take(10)))
                 }
 
-                // 3. Categories (Dynamic rows for top categories)
+                // 3. Categories
                 val movieKeywords = listOf("movie", "vod", "film", "cinema")
                 val sportsKeywords = listOf("sport", "football", "soccer", "espn")
 
@@ -121,34 +139,39 @@ class HomeViewModel @Inject constructor(
                     movieKeywords.any { c.groupTitle.lowercase().contains(it) }
                 }
                 if (movieChannels.isNotEmpty()) {
-                    feedItems.add(HomeFeedItem.SectionHeader("Movies & Cinema"))
-                    feedItems.add(HomeFeedItem.CategoryRow("Movies", movieChannels.take(15)))
+                    items.add(HomeFeedItem.SectionHeader("Movies & Cinema"))
+                    items.add(HomeFeedItem.CategoryRow("Movies", movieChannels.take(15)))
                 }
+                _loadingProgress.value = 0.8f
 
                 val sportsChannels = channels.filter { c ->
                     sportsKeywords.any { c.groupTitle.lowercase().contains(it) }
                 }
                 if (sportsChannels.isNotEmpty()) {
-                    feedItems.add(HomeFeedItem.SectionHeader("Live Sports"))
-                    feedItems.add(HomeFeedItem.CategoryRow("Sports", sportsChannels.take(15)))
+                    items.add(HomeFeedItem.SectionHeader("Live Sports"))
+                    items.add(HomeFeedItem.CategoryRow("Sports", sportsChannels.take(15)))
                 }
+                _loadingProgress.value = 0.9f
 
-                // 4. Everything Else (Grid)
+                // 4. Everything Else
                 val otherChannels = channels.filter { c ->
                     !movieKeywords.any { c.groupTitle.lowercase().contains(it) } &&
                             !sportsKeywords.any { c.groupTitle.lowercase().contains(it) }
                 }
                 if (otherChannels.isNotEmpty()) {
-                    feedItems.add(HomeFeedItem.SectionHeader("Live TV Channels"))
-                    feedItems.add(HomeFeedItem.ChannelGrid("All Channels", otherChannels))
+                    items.add(HomeFeedItem.SectionHeader("Live TV Channels"))
+                    items.add(HomeFeedItem.ChannelGrid("All Channels", otherChannels.take(100)))
                 }
+                items
+            }
 
-                _uiState.value = HomeUiState(
-                    isLoading = false,
-                    feedItems = feedItems,
-                    channelCount = channels.size
-                )
-            }.collect { /* Triggered by combine */ }
+            _feedState.value = HomeUiState(
+                error = null,
+                feedItems = feedItems,
+                channelCount = channels.size
+            )
+            _loadingProgress.value = 1f
+            _isLoading.value = false
         }
     }
 

@@ -2,11 +2,13 @@ package com.iptv.player.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -32,9 +34,9 @@ import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import com.iptv.player.ui.theme.Red40
-import com.iptv.player.ui.theme.SurfaceDarkElevated
-import com.iptv.player.ui.theme.SurfaceDarkVariant
+import coil.size.Precision
+import com.iptv.player.ui.theme.BrandAccent
+import com.iptv.player.ui.theme.BrandNavyDeep
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -50,24 +52,39 @@ fun ChannelCard(
     aspectRatio: Float = 16f / 9f
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (isFocused) 1.1f else 1.0f, label = "scale")
-    val borderAlpha by animateFloatAsState(if (isFocused) 1f else 0f, label = "borderAlpha")
-    val elevation by animateFloatAsState(if (isFocused) 12f else 2f, label = "elevation")
-    val borderColor by animateColorAsState(if (isFocused) Color.White else Color.Transparent, label = "borderColor")
+    
+    // Smooth scaling for TV-style focus
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.08f else 1.0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "scale"
+    )
+    
+    val elevation by animateFloatAsState(
+        targetValue = if (isFocused) 20f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "elevation"
+    )
 
-    Card(
+    val borderColor by animateColorAsState(
+        targetValue = if (isFocused) BrandAccent.copy(alpha = 0.8f) else Color.Transparent,
+        animationSpec = tween(durationMillis = 200),
+        label = "borderColor"
+    )
+
+    Surface(
         modifier = modifier
-            .fillMaxWidth()
-            .zIndex(if (isFocused) 1f else 0f) // Bring focused item to front
+            .zIndex(if (isFocused) 10f else 1f)
             .graphicsLayer {
-                this.scaleX = scale
-                this.scaleY = scale
-                this.shadowElevation = elevation
+                scaleX = scale
+                scaleY = scale
+                shadowElevation = elevation
             }
             .onFocusChanged { isFocused = it.isFocused }
+            .clip(RoundedCornerShape(12.dp))
             .border(
                 width = 2.dp,
-                color = borderColor.copy(alpha = borderAlpha),
+                color = borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
             .combinedClickable(
@@ -75,67 +92,44 @@ fun ChannelCard(
                 onLongClick = onLongClick
             ),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = SurfaceDarkVariant
-        )
+        color = BrandNavyDeep
     ) {
         Box(modifier = Modifier.aspectRatio(aspectRatio)) {
-            // Background Logo/Thumbnail
-            if (logoUrl.isNotBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(logoUrl)
-                        .crossfade(true)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .memoryCachePolicy(CachePolicy.ENABLED)
-                        .build(),
-                    contentDescription = name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(SurfaceDarkElevated),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LiveTv,
-                        contentDescription = null,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                    )
-                }
-            }
+            // High-quality Image loading with size optimization
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(logoUrl.takeIf { it.isNotBlank() })
+                    .crossfade(true)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .size(400, 225) // Downsample to card size
+                    .precision(Precision.EXACT)
+                    .placeholder(null)
+                    .error(null)
+                    .build(),
+                contentDescription = name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                alpha = if (isFocused) 1f else 0.85f
+            )
 
-            // Glow effect for focused state
-            if (isFocused) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
-                                radius = 500f
-                            )
-                        )
-                )
-            }
-
-            // Gradient Overlay for Text Readability
+            // Cinematic Gradient Overlay (Darker at bottom)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-                            startY = 100f
+                            listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.2f),
+                                Color.Black.copy(alpha = 0.9f)
+                            ),
+                            startY = 0f
                         )
                     )
             )
 
-            // Info text at the bottom
+            // Content Overlay
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -143,35 +137,47 @@ fun ChannelCard(
             ) {
                 Text(
                     text = name,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = 14.sp,
+                        letterSpacing = 0.5.sp
+                    ),
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                
                 if (groupTitle.isNotBlank()) {
                     Text(
-                        text = groupTitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Red40,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = groupTitle.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp
+                        ),
+                        color = BrandAccent,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1
                     )
                 }
             }
 
-            // Favorite icon (Top End)
-            IconButton(
-                onClick = onFavoriteClick,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(36.dp)
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = null,
-                    tint = if (isFavorite) Red40 else Color.White.copy(alpha = 0.5f),
-                    modifier = Modifier.size(18.dp)
+            // Minimalist Favorite Badge
+            if (isFavorite) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(6.dp)
+                        .background(BrandAccent, CircleShape)
+                )
+            }
+            
+            // Focus Glow effect
+            if (isFocused) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(1.dp, BrandAccent.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
                 )
             }
         }

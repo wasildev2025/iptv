@@ -2,41 +2,53 @@ package com.iptv.player.data.parser
 
 import com.iptv.player.data.model.M3UChannel
 import com.iptv.player.data.model.M3UPlaylist
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.BufferedReader
+import java.io.StringReader
+import java.util.concurrent.TimeUnit
 
 object M3UParser {
 
+    private val nameRegex = Regex(""",([^,]*)$""")
+    private val groupTitleRegex = Regex("""group-title="([^"]*?)"""")
+    private val logoRegex = Regex("""tvg-logo="([^"]*?)"""")
+    private val tvgIdRegex = Regex("""tvg-id="([^"]*?)"""")
+    private val tvgNameRegex = Regex("""tvg-name="([^"]*?)"""")
+
     fun parse(content: String): M3UPlaylist {
+        return parseFromReader(BufferedReader(StringReader(content)))
+    }
+
+    private fun parseFromReader(reader: BufferedReader): M3UPlaylist {
         val channels = mutableListOf<M3UChannel>()
         val groups = mutableSetOf<String>()
-        val lines = content.lines()
 
-        var i = 0
-        while (i < lines.size) {
-            val line = lines[i].trim()
+        var line: String? = reader.readLine()
+        while (line != null) {
+            val trimmedLine = line.trim()
 
-            if (line.startsWith("#EXTINF:")) {
-                // Parse channel info line
-                val name = extractName(line)
-                val groupTitle = extractAttribute(line, "group-title") ?: "Uncategorized"
-                val logoUrl = extractAttribute(line, "tvg-logo") ?: ""
-                val tvgId = extractAttribute(line, "tvg-id") ?: ""
-                val tvgName = extractAttribute(line, "tvg-name") ?: name
+            if (trimmedLine.startsWith("#EXTINF:")) {
+                val infoLine = trimmedLine
+                val name = extractName(infoLine)
+                val groupTitle = groupTitleRegex.find(infoLine)?.groupValues?.get(1) ?: "Uncategorized"
+                val logoUrl = logoRegex.find(infoLine)?.groupValues?.get(1) ?: ""
+                val tvgId = tvgIdRegex.find(infoLine)?.groupValues?.get(1) ?: ""
+                val tvgName = tvgNameRegex.find(infoLine)?.groupValues?.get(1) ?: name
 
                 // Next non-empty, non-comment line is the URL
-                i++
-                while (i < lines.size && (lines[i].isBlank() || lines[i].trim().startsWith("#"))) {
-                    i++
+                var streamUrlLine = reader.readLine()
+                while (streamUrlLine != null && (streamUrlLine.isBlank() || streamUrlLine.trim().startsWith("#"))) {
+                    streamUrlLine = reader.readLine()
                 }
 
-                if (i < lines.size) {
-                    val streamUrl = lines[i].trim()
-                    // Skip rtsp:// — ExoPlayer's DefaultHttpDataSource can't play it without RtspMediaSource.
-                    // Skip youtube.com / youtu.be — those are HTML pages, not playable streams (resolving
-                    // the underlying signed media URL requires a YouTube extractor).
+                if (streamUrlLine != null) {
+                    val streamUrl = streamUrlLine.trim()
                     val isPlayable = streamUrl.isNotEmpty() &&
                         (streamUrl.startsWith("http") || streamUrl.startsWith("rtmp")) &&
                         !streamUrl.contains("youtube.com", ignoreCase = true) &&
                         !streamUrl.contains("youtu.be", ignoreCase = true)
+                    
                     if (isPlayable) {
                         val isLive = !groupTitle.contains("VOD", ignoreCase = true) &&
                                     !groupTitle.contains("Movie", ignoreCase = true) &&
@@ -57,7 +69,7 @@ object M3UParser {
                     }
                 }
             }
-            i++
+            line = reader.readLine()
         }
 
         return M3UPlaylist(
@@ -67,25 +79,21 @@ object M3UParser {
     }
 
     private fun extractName(line: String): String {
-        val commaIndex = line.lastIndexOf(',')
-        return if (commaIndex >= 0) line.substring(commaIndex + 1).trim() else "Unknown"
+        return nameRegex.find(line)?.groupValues?.get(1)?.trim() ?: "Unknown"
     }
 
-    private fun extractAttribute(line: String, key: String): String? {
-        val pattern = Regex("""$key="([^"]*?)"""")
-        return pattern.find(line)?.groupValues?.get(1)
-    }
-
-    // Parse from URL (download then parse)
     suspend fun parseFromUrl(url: String): M3UPlaylist {
-        val client = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        val client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
             .build()
 
-        val request = okhttp3.Request.Builder().url(url).build()
+        val request = Request.Builder().url(url).build()
         val response = client.newCall(request).execute()
-        val body = response.body?.string() ?: throw Exception("Empty playlist response")
-        return parse(body)
+        
+        if (!response.isSuccessful) throw Exception("Failed to download playlist: ${response.code}")
+        
+        val bodyReader = response.body?.charStream()?.buffered() ?: throw Exception("Empty playlist response")
+        return bodyReader.use { parseFromReader(it) }
     }
 }

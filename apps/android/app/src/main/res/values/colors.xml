@@ -7,5 +7,12 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="ic_launcher_background">#FF3700B3</color>
+
+    <!-- IPTV Player Premium Colors -->
+    <color name="brand_background">#050B18</color>
+    <color name="brand_accent">#00E5FF</color>
+    <color name="brand_accent_glow">#4000E5FF</color>
+    <color name="brand_navy_deep">#0A1222</color>
+
+    <color name="ic_launcher_background">#050B18</color>
 </resources>

@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.iptv.player"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.iptv.player"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
@@ -33,6 +33,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 kapt {
@@ -40,6 +46,10 @@ kapt {
 }
 
 dependencies {
+    // Core & Splash
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     // Compose
     val composeBom = platform("androidx.compose:compose-bom:2024.10.00")
     implementation(composeBom)
@@ -85,6 +95,5 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Core
-    implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.google.code.gson:gson:2.11.0")
 }

@@ -31,8 +31,7 @@
 
     <!-- Main Play Symbol (Dynamic Flow) -->
     <path
-        android:pathData="M100,85 L160,120 L100,155 Z"
-        android:fillColor="#00E5FF">
+        android:pathData="M100,85 L160,120 L100,155 Z">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:startX="100"

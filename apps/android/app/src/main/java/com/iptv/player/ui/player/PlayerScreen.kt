@@ -50,7 +50,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.iptv.player.data.model.EpgProgram
-import com.iptv.player.ui.theme.Red40
+import com.iptv.player.ui.theme.BrandAccent
 import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 import java.text.SimpleDateFormat
@@ -176,7 +176,7 @@ fun PlayerScreen(
         )
 
         if (isBuffering) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(56.dp), color = Red40)
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(56.dp), color = BrandAccent)
         }
 
         AnimatedVisibility(
@@ -271,7 +271,7 @@ fun PlayerControlsOverlay(
                 Text(
                     text = uiState.currentChannel?.groupTitle ?: "",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Red40
+                    color = BrandAccent
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
@@ -279,7 +279,7 @@ fun PlayerControlsOverlay(
                 Icon(
                     imageVector = if (uiState.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = null,
-                    tint = if (uiState.isFavorite) Red40 else Color.White
+                    tint = if (uiState.isFavorite) BrandAccent else Color.White
                 )
             }
         }
@@ -318,8 +318,8 @@ fun PlayerControlsOverlay(
                     text = "LIVE",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.background(Red40, RoundedCornerShape(2.dp)).padding(horizontal = 4.dp)
+                    color = Color.Black,
+                    modifier = Modifier.background(BrandAccent, RoundedCornerShape(2.dp)).padding(horizontal = 4.dp)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 val currentProgram = uiState.currentPrograms.find { 
@@ -381,7 +381,7 @@ fun MiniEpgOverlay(programs: List<EpgProgram>) {
                             Text(
                                 text = "${timeFormat.format(Date(program.startTime))} - ${timeFormat.format(Date(program.endTime))}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Red40
+                                color = BrandAccent
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -395,7 +395,7 @@ fun MiniEpgOverlay(programs: List<EpgProgram>) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = program.description,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.6f),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
@@ -409,24 +409,32 @@ fun MiniEpgOverlay(programs: List<EpgProgram>) {
 }
 
 @Composable
-private fun ErrorOverlay(error: String, onRetry: () -> Unit, onBack: () -> Unit) {
+fun ErrorOverlay(error: String, onRetry: () -> Unit, onBack: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f)),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Icon(Icons.Default.ErrorOutline, null, tint = Red40, modifier = Modifier.size(64.dp))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Icon(Icons.Default.ErrorOutline, null, tint = BrandAccent, modifier = Modifier.size(64.dp))
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Playback Failed", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(error, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Center)
+            Text(
+                text = error,
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
             Spacer(modifier = Modifier.height(32.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Red40)) {
-                    Text("Retry")
-                }
-                TextButton(onClick = onBack) {
+                OutlinedButton(onClick = onBack, border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp)) {
                     Text("Go Back", color = Color.White)
+                }
+                Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = BrandAccent)) {
+                    Text("Retry", color = Color.Black)
                 }
             }
         }

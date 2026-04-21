@@ -22,14 +22,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.iptv.player.data.model.M3UChannel
 import com.iptv.player.util.ConnectionState
 import com.iptv.player.ui.components.ChannelCard
 import com.iptv.player.ui.components.SearchOverlay
-import com.iptv.player.ui.theme.Red40
-import com.iptv.player.ui.theme.SurfaceDark
-import com.iptv.player.ui.theme.SurfaceDarkVariant
+import com.iptv.player.ui.theme.BrandAccent
+import com.iptv.player.ui.theme.BrandBackground
+import com.iptv.player.ui.theme.BrandNavyDeep
+import com.iptv.player.ui.theme.BrandTextPrimary
+import com.iptv.player.ui.theme.BrandTextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -42,105 +45,46 @@ fun HomeScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val isSearchActive by viewModel.isSearchActive.collectAsState()
-    val searchResults by viewModel.searchResults.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
-    val connectionState by viewModel.connectionState.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val loadingProgress by viewModel.loadingProgress.collectAsStateWithLifecycle()
+    val feedState by viewModel.feedState.collectAsStateWithLifecycle()
+    
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
     
     val favoriteUrls = remember(favorites) {
         favorites.map { it.streamUrl }.toSet()
     }
 
     LaunchedEffect(playlistUrl) {
-        if (uiState.isLoading && uiState.channelCount == 0) {
+        if (isLoading && feedState.channelCount == 0) {
             viewModel.loadPlaylist(playlistUrl)
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(SurfaceDark)) {
+    Box(modifier = Modifier.fillMaxSize().background(BrandBackground)) {
         Scaffold(
             topBar = {
-                Column {
-                    CenterAlignedTopAppBar(
-                        title = {
-                            Text(
-                                text = "IPTV PREMIER",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 2.sp,
-                                color = Red40
-                            )
-                        },
-                        actions = {
-                            IconButton(onClick = { viewModel.toggleSearch() }) {
-                                Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
-                            }
-                            IconButton(onClick = onSettingsClick) {
-                                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
-                            }
-                        },
-                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                            containerColor = Color.Transparent
-                        )
-                    )
-                    
-                    // Connection State Banner
-                    AnimatedVisibility(
-                        visible = connectionState is ConnectionState.Unavailable,
-                        enter = expandVertically(),
-                        exit = shrinkVertically()
-                    ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Color.Black.copy(alpha = 0.8f)
-                        ) {
-                            Text(
-                                text = "OFFLINE MODE - Showing cached content",
-                                modifier = Modifier.padding(vertical = 4.dp).fillMaxWidth(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
+                HomeTopBar(
+                    onSearchClick = { viewModel.toggleSearch() },
+                    onSettingsClick = onSettingsClick,
+                    connectionState = connectionState
+                )
             },
             bottomBar = {
-                NavigationBar(
-                    containerColor = SurfaceDarkVariant.copy(alpha = 0.95f),
-                    tonalElevation = 0.dp
-                ) {
-                    NavigationBarItem(
-                        selected = true,
-                        onClick = { },
-                        icon = { Icon(Icons.Default.Home, null) },
-                        label = { Text("Home") },
-                        colors = NavigationBarItemDefaults.colors(selectedIconColor = Red40, indicatorColor = Color.Transparent)
-                    )
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = onEpgClick,
-                        icon = { Icon(Icons.Default.DateRange, null) },
-                        label = { Text("Guide") }
-                    )
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = { /* Navigate to Favorites */ },
-                        icon = { Icon(Icons.Default.Favorite, null) },
-                        label = { Text("My List") }
-                    )
-                }
+                HomeBottomBar(onEpgClick = onEpgClick)
             },
-            containerColor = SurfaceDark
+            containerColor = BrandBackground
         ) { paddingValues ->
             Box(modifier = Modifier.padding(paddingValues)) {
                 when {
-                    uiState.isLoading -> LoadingContent()
-                    uiState.error != null -> ErrorContent(uiState.error!!, onRetry = { viewModel.refreshPlaylist(playlistUrl) })
+                    isLoading -> LoadingContent(loadingProgress)
+                    feedState.error != null -> ErrorContent(feedState.error!!, onRetry = { viewModel.refreshPlaylist(playlistUrl) })
                     else -> HomeFeed(
-                        items = uiState.feedItems,
+                        items = feedState.feedItems,
                         favoriteUrls = favoriteUrls,
                         onChannelClick = onChannelClick,
                         onFavoriteClick = { viewModel.toggleFavorite(it) },
@@ -173,6 +117,101 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeTopBar(
+    onSearchClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    connectionState: ConnectionState
+) {
+    Column {
+        CenterAlignedTopAppBar(
+            title = {
+                Text(
+                    text = "IPTV PREMIER",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp,
+                    color = BrandAccent
+                )
+            },
+            actions = {
+                IconButton(onClick = onSearchClick) {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
+                }
+                IconButton(onClick = onSettingsClick) {
+                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                }
+            },
+            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                containerColor = Color.Transparent
+            )
+        )
+        
+        // Connection State Banner
+        AnimatedVisibility(
+            visible = connectionState is ConnectionState.Unavailable,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.Black.copy(alpha = 0.8f)
+            ) {
+                Text(
+                    text = "OFFLINE MODE - Showing cached content",
+                    modifier = Modifier.padding(vertical = 4.dp).fillMaxWidth(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BrandAccent,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeBottomBar(onEpgClick: () -> Unit) {
+    NavigationBar(
+        containerColor = BrandNavyDeep.copy(alpha = 0.95f),
+        tonalElevation = 0.dp
+    ) {
+        NavigationBarItem(
+            selected = true,
+            onClick = { },
+            icon = { Icon(Icons.Default.Home, null) },
+            label = { Text("Home") },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = BrandAccent,
+                selectedTextColor = BrandAccent,
+                indicatorColor = Color.Transparent,
+                unselectedIconColor = BrandTextSecondary,
+                unselectedTextColor = BrandTextSecondary
+            )
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = onEpgClick,
+            icon = { Icon(Icons.Default.DateRange, null) },
+            label = { Text("Guide") },
+            colors = NavigationBarItemDefaults.colors(
+                unselectedIconColor = BrandTextSecondary,
+                unselectedTextColor = BrandTextSecondary
+            )
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = { /* Navigate to Favorites */ },
+            icon = { Icon(Icons.Default.Favorite, null) },
+            label = { Text("My List") },
+            colors = NavigationBarItemDefaults.colors(
+                unselectedIconColor = BrandTextSecondary,
+                unselectedTextColor = BrandTextSecondary
+            )
+        )
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeFeed(
@@ -187,7 +226,18 @@ fun HomeFeed(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        items(items) { item ->
+        items(
+            items = items,
+            key = { item ->
+                when (item) {
+                    is HomeFeedItem.Hero -> "hero-${item.channel.streamUrl}"
+                    is HomeFeedItem.SectionHeader -> "header-${item.title}"
+                    is HomeFeedItem.ContinueWatchingRow -> "continue-watching"
+                    is HomeFeedItem.CategoryRow -> "category-${item.title}"
+                    is HomeFeedItem.ChannelGrid -> "grid-${item.title}"
+                }
+            }
+        ) { item ->
             when (item) {
                 is HomeFeedItem.Hero -> {
                     HeroSection(
@@ -204,72 +254,122 @@ fun HomeFeed(
                         text = item.title,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = BrandTextPrimary,
                         modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)
                     )
                 }
                 is HomeFeedItem.ContinueWatchingRow -> {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(item.channels) { recent ->
-                            ChannelCard(
-                                name = recent.name,
-                                groupTitle = recent.groupTitle,
-                                logoUrl = recent.logoUrl,
-                                isFavorite = favoriteUrls.contains(recent.streamUrl),
-                                onClick = { onChannelClick(recent.streamUrl, recent.name, recent.groupTitle, recent.logoUrl) },
-                                modifier = Modifier.width(200.dp)
-                            )
-                        }
-                    }
+                    ContinueWatchingRow(
+                        channels = item.channels,
+                        favoriteUrls = favoriteUrls,
+                        onChannelClick = onChannelClick
+                    )
                 }
                 is HomeFeedItem.CategoryRow -> {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(item.channels) { channel ->
-                            with(sharedTransitionScope) {
-                                ChannelCard(
-                                    name = channel.name,
-                                    groupTitle = channel.groupTitle,
-                                    logoUrl = channel.logoUrl,
-                                    isFavorite = favoriteUrls.contains(channel.streamUrl),
-                                    onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
-                                    onFavoriteClick = { onFavoriteClick(channel) },
-                                    modifier = Modifier
-                                        .width(160.dp)
-                                        .sharedElement(
-                                            rememberSharedContentState(key = "logo-${channel.streamUrl}"),
-                                            animatedVisibilityScope = animatedVisibilityScope
-                                        )
-                                )
-                            }
-                        }
-                    }
+                    CategoryRow(
+                        title = item.title,
+                        channels = item.channels,
+                        favoriteUrls = favoriteUrls,
+                        onChannelClick = onChannelClick,
+                        onFavoriteClick = onFavoriteClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
                 }
                 is HomeFeedItem.ChannelGrid -> {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(item.channels.take(20)) { channel ->
-                            ChannelCard(
-                                name = channel.name,
-                                groupTitle = channel.groupTitle,
-                                logoUrl = channel.logoUrl,
-                                isFavorite = favoriteUrls.contains(channel.streamUrl),
-                                onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
-                                onFavoriteClick = { onFavoriteClick(channel) },
-                                modifier = Modifier.width(140.dp),
-                                aspectRatio = 1f
-                            )
-                        }
-                    }
+                    ChannelGridRow(
+                        channels = item.channels,
+                        favoriteUrls = favoriteUrls,
+                        onChannelClick = onChannelClick,
+                        onFavoriteClick = onFavoriteClick
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ContinueWatchingRow(
+    channels: List<com.iptv.player.data.model.RecentChannel>,
+    favoriteUrls: Set<String>,
+    onChannelClick: (String, String, String, String) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(channels, key = { it.streamUrl }) { recent ->
+            ChannelCard(
+                name = recent.name,
+                groupTitle = recent.groupTitle,
+                logoUrl = recent.logoUrl,
+                isFavorite = favoriteUrls.contains(recent.streamUrl),
+                onClick = { onChannelClick(recent.streamUrl, recent.name, recent.groupTitle, recent.logoUrl) },
+                modifier = Modifier.width(200.dp)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun CategoryRow(
+    title: String,
+    channels: List<M3UChannel>,
+    favoriteUrls: Set<String>,
+    onChannelClick: (String, String, String, String) -> Unit,
+    onFavoriteClick: (M3UChannel) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(channels, key = { it.streamUrl }) { channel ->
+            with(sharedTransitionScope) {
+                ChannelCard(
+                    name = channel.name,
+                    groupTitle = channel.groupTitle,
+                    logoUrl = channel.logoUrl,
+                    isFavorite = favoriteUrls.contains(channel.streamUrl),
+                    onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
+                    onFavoriteClick = { onFavoriteClick(channel) },
+                    modifier = Modifier
+                        .width(160.dp)
+                        .sharedElement(
+                            rememberSharedContentState(key = "logo-${channel.streamUrl}"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ChannelGridRow(
+    channels: List<M3UChannel>,
+    favoriteUrls: Set<String>,
+    onChannelClick: (String, String, String, String) -> Unit,
+    onFavoriteClick: (M3UChannel) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(channels.take(20), key = { it.streamUrl }) { channel ->
+            ChannelCard(
+                name = channel.name,
+                groupTitle = channel.groupTitle,
+                logoUrl = channel.logoUrl,
+                isFavorite = favoriteUrls.contains(channel.streamUrl),
+                onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
+                onFavoriteClick = { onFavoriteClick(channel) },
+                modifier = Modifier.width(140.dp),
+                aspectRatio = 1f
+            )
         }
     }
 }
@@ -286,7 +386,7 @@ fun HeroSection(
         modifier = Modifier
             .fillMaxWidth()
             .height(300.dp)
-            .background(SurfaceDarkVariant)
+            .background(BrandNavyDeep)
     ) {
         with(sharedTransitionScope) {
             AsyncImage(
@@ -308,7 +408,7 @@ fun HeroSection(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, SurfaceDark),
+                        colors = listOf(Color.Transparent, BrandBackground),
                         startY = 300f
                     )
                 )
@@ -320,7 +420,7 @@ fun HeroSection(
                 .padding(24.dp)
         ) {
             Surface(
-                color = Red40,
+                color = BrandAccent,
                 shape = RoundedCornerShape(4.dp)
             ) {
                 Text(
@@ -328,7 +428,7 @@ fun HeroSection(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = BrandBackground
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -336,14 +436,14 @@ fun HeroSection(
                 text = channel.name,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
+                color = BrandTextPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = channel.groupTitle,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.7f)
+                color = BrandTextSecondary
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(
@@ -360,12 +460,28 @@ fun HeroSection(
 }
 
 @Composable
-private fun LoadingContent() {
+private fun LoadingContent(progress: Float) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = Red40, modifier = Modifier.size(48.dp))
+            CircularProgressIndicator(
+                progress = { progress },
+                color = BrandAccent,
+                modifier = Modifier.size(64.dp),
+                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+                trackColor = BrandNavyDeep
+            )
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Building your feed...", color = Color.White.copy(alpha = 0.7f))
+            Text(
+                text = "Building your feed... ${(progress * 100).toInt()}%",
+                style = MaterialTheme.typography.bodyLarge,
+                color = BrandTextPrimary,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "Optimizing large playlist content",
+                style = MaterialTheme.typography.labelSmall,
+                color = BrandTextSecondary
+            )
         }
     }
 }
@@ -374,11 +490,11 @@ private fun LoadingContent() {
 private fun ErrorContent(error: String, onRetry: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Text("Failed to load feed", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Failed to load feed", style = MaterialTheme.typography.headlineSmall, color = BrandTextPrimary, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(error, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Center)
+            Text(error, style = MaterialTheme.typography.bodyMedium, color = BrandTextSecondary, textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Red40)) {
+            Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = BrandAccent, contentColor = BrandBackground)) {
                 Text("Retry")
             }
         }

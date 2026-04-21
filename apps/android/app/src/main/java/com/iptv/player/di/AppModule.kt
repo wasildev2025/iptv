@@ -7,6 +7,7 @@ import com.iptv.player.data.api.IPTVApiService
 import com.iptv.player.data.auth.DeviceTokenInterceptor
 import com.iptv.player.data.db.AppDatabase
 import com.iptv.player.data.db.ChannelCacheDao
+import com.iptv.player.data.db.EpgDao
 import com.iptv.player.data.db.FavoriteDao
 import com.iptv.player.data.db.RecentDao
 import dagger.Module
@@ -65,10 +66,13 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "iptv_player.db"
-        ).build()
+        )
+        .fallbackToDestructiveMigration()
+        .build()
     }
 
     @Provides fun provideFavoriteDao(db: AppDatabase): FavoriteDao = db.favoriteDao()
     @Provides fun provideRecentDao(db: AppDatabase): RecentDao = db.recentDao()
     @Provides fun provideChannelCacheDao(db: AppDatabase): ChannelCacheDao = db.channelCacheDao()
+    @Provides fun provideEpgDao(db: AppDatabase): EpgDao = db.epgDao()
 }

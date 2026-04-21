@@ -1,5 +1,6 @@
 package com.iptv.player.data.model
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -64,11 +65,13 @@ data class VerifyPinResponse(
 
 // --- M3U parsed models --------------------------------------------------------
 
+@Immutable
 data class M3UPlaylist(
     val channels: List<M3UChannel>,
     val groups: List<String>
 )
 
+@Immutable
 data class M3UChannel(
     val name: String,
     val groupTitle: String,
@@ -81,6 +84,7 @@ data class M3UChannel(
 
 // --- Room entities ------------------------------------------------------------
 
+@Immutable
 @Entity(tableName = "favorites")
 data class FavoriteChannel(
     @PrimaryKey val streamUrl: String,
@@ -90,6 +94,7 @@ data class FavoriteChannel(
     val addedAt: Long = System.currentTimeMillis()
 )
 
+@Immutable
 @Entity(tableName = "recent_channels")
 data class RecentChannel(
     @PrimaryKey val streamUrl: String,
@@ -99,6 +104,7 @@ data class RecentChannel(
     val watchedAt: Long = System.currentTimeMillis()
 )
 
+@Immutable
 @Entity(tableName = "cached_channels")
 data class CachedChannel(
     @PrimaryKey val streamUrl: String,
@@ -112,6 +118,7 @@ data class CachedChannel(
 
 // --- EPG models ---------------------------------------------------------------
 
+@Immutable
 @Entity(tableName = "epg_programs", primaryKeys = ["channelId", "startTime"])
 data class EpgProgram(
     val channelId: String,
