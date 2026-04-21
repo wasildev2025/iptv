@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iptv.player.data.model.FavoriteChannel
 import com.iptv.player.data.model.M3UChannel
+import com.iptv.player.data.model.RecentChannel
 import com.iptv.player.data.repository.IPTVRepository
+import com.iptv.player.util.ConnectionState
+import com.iptv.player.util.NetworkObserver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,20 +20,26 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+sealed class HomeFeedItem {
+    data class Hero(val channel: M3UChannel) : HomeFeedItem()
+    data class SectionHeader(val title: String) : HomeFeedItem()
+    data class ContinueWatchingRow(val channels: List<RecentChannel>) : HomeFeedItem()
+    data class CategoryRow(val title: String, val channels: List<M3UChannel>) : HomeFeedItem()
+    data class ChannelGrid(val title: String, val channels: List<M3UChannel>) : HomeFeedItem()
+}
+
 data class HomeUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
-    val liveChannels: List<M3UChannel> = emptyList(),
-    val movieChannels: List<M3UChannel> = emptyList(),
-    val seriesChannels: List<M3UChannel> = emptyList(),
-    val groups: List<String> = emptyList(),
+    val feedItems: List<HomeFeedItem> = emptyList(),
     val channelCount: Int = 0
 )
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val repository: IPTVRepository
+    private val repository: IPTVRepository,
+    private val networkObserver: NetworkObserver
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -43,6 +52,9 @@ class HomeViewModel @Inject constructor(
 
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
+
+    val connectionState: StateFlow<ConnectionState> = networkObserver.connectionState
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ConnectionState.Available)
 
     val searchResults: StateFlow<List<M3UChannel>> = _searchQuery
         .debounce(300L)
@@ -61,6 +73,9 @@ class HomeViewModel @Inject constructor(
     val favorites: StateFlow<List<FavoriteChannel>> = repository.getFavorites()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val recentChannels: StateFlow<List<RecentChannel>> = repository.getRecent()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun loadPlaylist(playlistUrl: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
@@ -68,37 +83,72 @@ class HomeViewModel @Inject constructor(
             result.onSuccess { playlist ->
                 val channels = playlist.channels
                 _allChannels.value = channels
-
-                val movieKeywords = listOf("movie", "vod", "film", "cinema")
-                val seriesKeywords = listOf("series", "show", "episode", "season")
-
-                val liveChannels = mutableListOf<M3UChannel>()
-                val movieChannels = mutableListOf<M3UChannel>()
-                val seriesChannels = mutableListOf<M3UChannel>()
-
-                channels.forEach { channel ->
-                    val group = channel.groupTitle.lowercase()
-                    when {
-                        movieKeywords.any { group.contains(it) } -> movieChannels.add(channel)
-                        seriesKeywords.any { group.contains(it) } -> seriesChannels.add(channel)
-                        else -> liveChannels.add(channel)
-                    }
-                }
-
-                _uiState.value = HomeUiState(
-                    isLoading = false,
-                    liveChannels = liveChannels,
-                    movieChannels = movieChannels,
-                    seriesChannels = seriesChannels,
-                    groups = playlist.groups,
-                    channelCount = channels.size
-                )
+                buildHomeFeed(channels)
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Failed to load playlist"
                 )
             }
+        }
+    }
+
+    private fun buildHomeFeed(channels: List<M3UChannel>) {
+        viewModelScope.launch {
+            combine(recentChannels, favorites) { recents, favs ->
+                val feedItems = mutableListOf<HomeFeedItem>()
+
+                // 1. Hero Section (Pick a random popular channel or first favorite)
+                val heroChannel = favs.firstOrNull()?.let { f ->
+                    channels.find { it.streamUrl == f.streamUrl }
+                } ?: channels.firstOrNull()
+
+                heroChannel?.let {
+                    feedItems.add(HomeFeedItem.Hero(it))
+                }
+
+                // 2. Continue Watching
+                if (recents.isNotEmpty()) {
+                    feedItems.add(HomeFeedItem.SectionHeader("Continue Watching"))
+                    feedItems.add(HomeFeedItem.ContinueWatchingRow(recents.take(10)))
+                }
+
+                // 3. Categories (Dynamic rows for top categories)
+                val movieKeywords = listOf("movie", "vod", "film", "cinema")
+                val sportsKeywords = listOf("sport", "football", "soccer", "espn")
+
+                val movieChannels = channels.filter { c ->
+                    movieKeywords.any { c.groupTitle.lowercase().contains(it) }
+                }
+                if (movieChannels.isNotEmpty()) {
+                    feedItems.add(HomeFeedItem.SectionHeader("Movies & Cinema"))
+                    feedItems.add(HomeFeedItem.CategoryRow("Movies", movieChannels.take(15)))
+                }
+
+                val sportsChannels = channels.filter { c ->
+                    sportsKeywords.any { c.groupTitle.lowercase().contains(it) }
+                }
+                if (sportsChannels.isNotEmpty()) {
+                    feedItems.add(HomeFeedItem.SectionHeader("Live Sports"))
+                    feedItems.add(HomeFeedItem.CategoryRow("Sports", sportsChannels.take(15)))
+                }
+
+                // 4. Everything Else (Grid)
+                val otherChannels = channels.filter { c ->
+                    !movieKeywords.any { c.groupTitle.lowercase().contains(it) } &&
+                            !sportsKeywords.any { c.groupTitle.lowercase().contains(it) }
+                }
+                if (otherChannels.isNotEmpty()) {
+                    feedItems.add(HomeFeedItem.SectionHeader("Live TV Channels"))
+                    feedItems.add(HomeFeedItem.ChannelGrid("All Channels", otherChannels))
+                }
+
+                _uiState.value = HomeUiState(
+                    isLoading = false,
+                    feedItems = feedItems,
+                    channelCount = channels.size
+                )
+            }.collect { /* Triggered by combine */ }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.iptv.player.ui.epg
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,9 +11,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,9 +35,12 @@ private val HOUR_WIDTH = 240.dp
 private val CHANNEL_COLUMN_WIDTH = 120.dp
 private val ROW_HEIGHT = 70.dp
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun EpgScreen(
     onChannelClick: (String, String, String, String) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: EpgViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -58,7 +65,9 @@ fun EpgScreen(
                     programs = uiState.programs,
                     startTime = uiState.startTimeMillis,
                     horizontalScrollState = horizontalScrollState,
-                    onChannelClick = onChannelClick
+                    onChannelClick = onChannelClick,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         }
@@ -99,19 +108,26 @@ fun TimeHeader(startTime: Long, endTime: Long, scrollState: ScrollState) {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun EpgGrid(
     channels: List<CachedChannel>,
     programs: Map<String, List<EpgProgram>>,
     startTime: Long,
     horizontalScrollState: ScrollState,
-    onChannelClick: (String, String, String, String) -> Unit
+    onChannelClick: (String, String, String, String) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(channels) { channel ->
             Row(modifier = Modifier.height(ROW_HEIGHT).fillMaxWidth()) {
                 // Sticky Channel Column
-                ChannelItem(channel) {
+                ChannelItem(
+                    channel = channel,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
+                ) {
                     onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl)
                 }
 
@@ -133,8 +149,14 @@ fun EpgGrid(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun ChannelItem(channel: CachedChannel, onClick: () -> Unit) {
+fun ChannelItem(
+    channel: CachedChannel,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
+    onClick: () -> Unit
+) {
     var isFocused by remember { mutableStateOf(false) }
     
     Surface(
@@ -142,6 +164,7 @@ fun ChannelItem(channel: CachedChannel, onClick: () -> Unit) {
         modifier = Modifier
             .width(CHANNEL_COLUMN_WIDTH)
             .fillMaxHeight()
+            .onFocusChanged { isFocused = it.isFocused }
             .background(SurfaceDarkVariant)
             .border(1.dp, if (isFocused) Color.White else Color.Transparent),
         color = SurfaceDarkVariant
@@ -151,12 +174,19 @@ fun ChannelItem(channel: CachedChannel, onClick: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            AsyncImage(
-                model = channel.logoUrl,
-                contentDescription = null,
-                modifier = Modifier.size(32.dp),
-                contentScale = ContentScale.Fit
-            )
+            with(sharedTransitionScope) {
+                AsyncImage(
+                    model = channel.logoUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .sharedElement(
+                            rememberSharedContentState(key = "logo-${channel.streamUrl}"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        ),
+                    contentScale = ContentScale.Fit
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = channel.name,
@@ -172,6 +202,7 @@ fun ChannelItem(channel: CachedChannel, onClick: () -> Unit) {
 
 @Composable
 fun ProgramItem(program: EpgProgram, gridStartTime: Long) {
+    var isFocused by remember { mutableStateOf(false) }
     val duration = program.endTime - program.startTime
     val startOffset = program.startTime - gridStartTime
     
@@ -184,8 +215,11 @@ fun ProgramItem(program: EpgProgram, gridStartTime: Long) {
             .width(width)
             .fillMaxHeight()
             .padding(2.dp)
+            .scale(if (isFocused) 1.02f else 1f)
+            .onFocusChanged { isFocused = it.isFocused }
             .clip(RoundedCornerShape(4.dp))
-            .background(SurfaceDarkElevated)
+            .background(if (isFocused) Red40.copy(alpha = 0.2f) else SurfaceDarkElevated)
+            .border(if (isFocused) 2.dp else 0.dp, Color.White, RoundedCornerShape(4.dp))
             .clickable { /* Show details */ }
             .padding(8.dp)
     ) {

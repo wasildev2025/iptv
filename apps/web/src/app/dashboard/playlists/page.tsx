@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import type { App } from "@/types";
@@ -20,6 +20,9 @@ import {
   Trash2,
   X,
   Save,
+  CheckCircle2,
+  Loader2,
+  Smartphone,
 } from "lucide-react";
 
 interface ExistingPlaylist {
@@ -57,12 +60,37 @@ const emptyForm: PlaylistFormState = {
   isProtected: false,
 };
 
+interface DeviceRow {
+  id: string;
+  macAddress: string;
+  macAddressAlt: string | null;
+  status: "active" | "expired" | "disabled" | "trial";
+  packageType: "yearly" | "lifetime";
+  expiresAt: string | null;
+  playlistUrl: string | null;
+  notes: string | null;
+  createdAt: string;
+  app: { id: string; name: string; slug: string };
+}
+
+interface DevicesPage {
+  data: DeviceRow[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+const DEVICES_PAGE_SIZE = 50;
+
 export default function PlaylistsPage() {
   const [selectedApp, setSelectedApp] = useState("");
   const [macAddress, setMacAddress] = useState("");
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deviceSearch, setDeviceSearch] = useState("");
+  const [debouncedDeviceSearch, setDebouncedDeviceSearch] = useState("");
 
   const [form, setForm] = useState<PlaylistFormState>(emptyForm);
 
@@ -71,11 +99,37 @@ export default function PlaylistsPage() {
     queryFn: async () => (await api.get("/apps")).data,
   });
 
-  const checkStatusMutation = useMutation({
-    mutationFn: async () => {
+  // Debounce the device search so we don't hammer the API on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDeviceSearch(deviceSearch.trim()), 250);
+    return () => clearTimeout(t);
+  }, [deviceSearch]);
+
+  const devicesQuery = useQuery<DevicesPage>({
+    queryKey: ["playlists-page-devices", selectedApp, debouncedDeviceSearch],
+    enabled: !!selectedApp,
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        appId: selectedApp,
+        limit: String(DEVICES_PAGE_SIZE),
+      });
+      if (debouncedDeviceSearch) params.set("search", debouncedDeviceSearch);
+      const res = await api.get(`/devices?${params.toString()}`);
+      return res.data as DevicesPage;
+    },
+  });
+
+  const checkStatusMutation = useMutation<
+    DeviceStatus,
+    Error,
+    { macAddress?: string } | void
+  >({
+    mutationFn: async (override) => {
+      const mac = override?.macAddress ?? macAddress;
       const res = await api.post("/playlists/check-status", {
         appId: selectedApp,
-        macAddress,
+        macAddress: mac,
       });
       return res.data as DeviceStatus;
     },
@@ -184,6 +238,15 @@ export default function PlaylistsPage() {
     checkStatusMutation.mutate();
   };
 
+  /** Fill the MAC input from the device list and immediately run Check Status. */
+  const handlePickDevice = (device: DeviceRow) => {
+    setMacAddress(device.macAddress);
+    setDeviceStatus(null);
+    resetForm();
+    // Pass the MAC directly so we don't race the async setState flush.
+    checkStatusMutation.mutate({ macAddress: device.macAddress });
+  };
+
   const handleSave = () => {
     if (!form.playlistUrl.trim()) {
       toast.error("Playlist URL is required");
@@ -230,6 +293,8 @@ export default function PlaylistsPage() {
                 onChange={(e) => {
                   setSelectedApp(e.target.value);
                   setDeviceStatus(null);
+                  setDeviceSearch("");
+                  setMacAddress("");
                   resetForm();
                 }}
               >
@@ -259,6 +324,19 @@ export default function PlaylistsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedApp && (
+        <DevicesForAppCard
+          isLoading={devicesQuery.isLoading}
+          isFetching={devicesQuery.isFetching}
+          devices={devicesQuery.data?.data ?? []}
+          total={devicesQuery.data?.total ?? 0}
+          search={deviceSearch}
+          onSearchChange={setDeviceSearch}
+          activeMac={macAddress}
+          onPick={handlePickDevice}
+        />
+      )}
 
       {deviceStatus && (
         <Card>
@@ -443,5 +521,150 @@ export default function PlaylistsPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Device picker — lists the reseller's devices for the selected app. Clicking
+// a row fills the MAC input above and triggers Check Status.
+// ----------------------------------------------------------------------------
+
+function DevicesForAppCard(props: {
+  isLoading: boolean;
+  isFetching: boolean;
+  devices: DeviceRow[];
+  total: number;
+  search: string;
+  onSearchChange: (v: string) => void;
+  activeMac: string;
+  onPick: (d: DeviceRow) => void;
+}) {
+  const {
+    isLoading,
+    isFetching,
+    devices,
+    total,
+    search,
+    onSearchChange,
+    activeMac,
+    onPick,
+  } = props;
+
+  return (
+    <Card>
+      <CardHeader className="bg-gray-100 py-3 px-4 flex flex-row items-center justify-between gap-2">
+        <CardTitle className="text-base font-medium flex items-center gap-2">
+          <Smartphone className="h-4 w-4" />
+          My Devices for this App
+          {total > 0 && (
+            <span className="text-xs font-normal text-muted-foreground">
+              ({devices.length} of {total} shown)
+            </span>
+          )}
+        </CardTitle>
+        <div className="relative w-64 max-w-full">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search MAC or notes..."
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-8 h-9"
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading devices...
+          </div>
+        ) : devices.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground italic">
+            {search
+              ? "No devices match your search."
+              : "No devices activated for this app yet. Activate a device first, then come back here to attach a playlist."}
+          </div>
+        ) : (
+          <div className="max-h-96 overflow-y-auto">
+            {isFetching && (
+              <div className="sticky top-0 bg-white/90 backdrop-blur-sm border-b px-3 py-1 text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" /> Refreshing...
+              </div>
+            )}
+            <ul className="divide-y">
+              {devices.map((d) => {
+                const isActive = activeMac === d.macAddress;
+                const isExpired = d.status === "expired" || d.status === "disabled";
+                return (
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      onClick={() => onPick(d)}
+                      disabled={isExpired}
+                      className={`w-full text-left px-4 py-3 grid grid-cols-[1fr_auto] gap-3 items-center transition-colors ${
+                        isActive ? "bg-red-50" : "hover:bg-gray-50"
+                      } ${isExpired ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-medium text-sm">
+                            {d.macAddress}
+                          </span>
+                          <StatusBadge status={d.status} />
+                          {d.playlistUrl && (
+                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5">
+                              <CheckCircle2 className="h-3 w-3" /> Has playlist
+                            </span>
+                          )}
+                          {d.packageType === "lifetime" && (
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-gray-100 rounded px-1.5 py-0.5">
+                              Lifetime
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-xs text-muted-foreground flex flex-wrap gap-x-3">
+                          <span>
+                            Expires:{" "}
+                            {d.expiresAt
+                              ? new Date(d.expiresAt).toLocaleDateString()
+                              : "—"}
+                          </span>
+                          {d.macAddressAlt && (
+                            <span>Alt: {d.macAddressAlt}</span>
+                          )}
+                          {d.notes && (
+                            <span className="truncate max-w-[280px]">
+                              {d.notes}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-xs text-red-600 font-medium shrink-0">
+                        {isActive ? "Selected" : "Use →"}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatusBadge({ status }: { status: DeviceRow["status"] }) {
+  const tone: Record<DeviceRow["status"], string> = {
+    active: "text-green-700 bg-green-50",
+    trial: "text-blue-700 bg-blue-50",
+    expired: "text-red-700 bg-red-50",
+    disabled: "text-gray-700 bg-gray-100",
+  };
+  return (
+    <span
+      className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${tone[status]}`}
+    >
+      {status}
+    </span>
   );
 }

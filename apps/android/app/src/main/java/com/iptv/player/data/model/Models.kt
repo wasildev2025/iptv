@@ -112,6 +112,7 @@ data class CachedChannel(
 
 // --- EPG models ---------------------------------------------------------------
 
+@Entity(tableName = "epg_programs", primaryKeys = ["channelId", "startTime"])
 data class EpgProgram(
     val channelId: String,
     val title: String,

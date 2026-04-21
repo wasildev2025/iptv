@@ -2,65 +2,39 @@ package com.iptv.player.ui.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.util.Log
+import android.view.KeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
@@ -73,42 +47,40 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
+import com.iptv.player.data.model.EpgProgram
 import com.iptv.player.ui.theme.Red40
 import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.TimeUnit
-import androidx.media3.ui.PlayerView
 
 @OptIn(UnstableApi::class)
+@ExperimentalSharedTransitionApi
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
-
-    val streamUrl = viewModel.streamUrl
-    val channelName = viewModel.channelName
-    val isFavorite by viewModel.isFavorite.collectAsState()
-    val playerError by viewModel.playerError.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     var isPlaying by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-    var volume by remember { mutableFloatStateOf(1f) }
 
-    // Auto-hide controls
-    LaunchedEffect(showControls) {
-        if (showControls) {
-            delay(3000)
+    LaunchedEffect(showControls, uiState.isMiniEpgVisible) {
+        if (showControls && !uiState.isMiniEpgVisible) {
+            delay(5000)
             showControls = false
         }
     }
 
-    // Force landscape
     DisposableEffect(Unit) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         onDispose {
@@ -116,77 +88,46 @@ fun PlayerScreen(
         }
     }
 
-    BackHandler { onBack() }
+    BackHandler { 
+        if (uiState.isMiniEpgVisible) viewModel.toggleMiniEpg() else onBack() 
+    }
 
-    // ExoPlayer setup
     val exoPlayer = remember {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
             .build()
-
+        
         val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(
             context,
             OkHttpDataSource.Factory(okHttpClient)
                 .setUserAgent(Util.getUserAgent(context, "IPTVPlayer"))
         )
-        
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(dataSourceFactory)
 
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build().apply {
-                val mediaItem = MediaItem.fromUri(streamUrl)
-                setMediaItem(mediaItem)
-                playWhenReady = true
-                prepare()
-            }
+            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
+            .build()
     }
 
-    // Player listener
+    LaunchedEffect(uiState.currentChannel?.streamUrl) {
+        val url = uiState.currentChannel?.streamUrl ?: return@LaunchedEffect
+        isBuffering = true
+        exoPlayer.stop()
+        exoPlayer.setMediaItem(MediaItem.fromUri(url))
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+        showControls = true
+    }
+
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                when (playbackState) {
-                    Player.STATE_BUFFERING -> isBuffering = true
-                    Player.STATE_READY -> isBuffering = false
-                    Player.STATE_ENDED -> {
-                        isPlaying = false
-                        isBuffering = false
-                    }
-                    Player.STATE_IDLE -> isBuffering = false
-                }
+            override fun onPlaybackStateChanged(state: Int) {
+                isBuffering = state == Player.STATE_BUFFERING
             }
-
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
             }
-
             override fun onPlayerError(error: PlaybackException) {
-                isBuffering = false
-                Log.e(
-                    "PlayerScreen",
-                    "Playback failed [code=${error.errorCode} ${error.errorCodeName}] url=$streamUrl channel=$channelName",
-                    error
-                )
-                val message = when (error.errorCode) {
-                    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> {
-                        "Server error (404/500). The stream might be offline."
-                    }
-                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED -> {
-                        "Network connection failed. Check your internet."
-                    }
-                    PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED -> {
-                        "Cleartext HTTP traffic not permitted."
-                    }
-                    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE -> {
-                        "Invalid content type. Unsupported stream format."
-                    }
-                    else -> "Failed to connect to stream. The server might be unreachable."
-                }
-                viewModel.onPlayerError(message)
+                viewModel.onPlayerError("Stream Error: ${error.errorCodeName}")
             }
         }
         exoPlayer.addListener(listener)
@@ -196,21 +137,25 @@ fun PlayerScreen(
         }
     }
 
-    // Position tracking
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            currentPosition = exoPlayer.currentPosition
-            duration = exoPlayer.duration.coerceAtLeast(0L)
-            delay(1000)
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP -> { viewModel.zapPrevious(); true }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> { viewModel.zapNext(); true }
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showControls = true; true }
+                        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (showControls) viewModel.toggleMiniEpg()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
     ) {
-        // Video Surface
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -222,226 +167,240 @@ fun PlayerScreen(
                     )
                 }
             },
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) {
-                    showControls = !showControls
-                }
+            modifier = Modifier.fillMaxSize().clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                showControls = !showControls
+            }
         )
 
-        // Buffering indicator
         if (isBuffering) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(64.dp),
-                color = Red40,
-                strokeWidth = 4.dp
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(56.dp), color = Red40)
+        }
+
+        AnimatedVisibility(
+            visible = showControls,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            PlayerControlsOverlay(
+                uiState = uiState,
+                isPlaying = isPlaying,
+                onPlayPause = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                onBack = onBack,
+                onFavoriteToggle = { viewModel.toggleFavorite() },
+                onZapNext = { viewModel.zapNext() },
+                onZapPrev = { viewModel.zapPrevious() },
+                onToggleEpg = { viewModel.toggleMiniEpg() },
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
 
-        // Error overlay
-        if (playerError != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(32.dp)
-                ) {
-                    Text(
-                        text = "Playback Error",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = playerError ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Button(
-                            onClick = {
-                                viewModel.clearError()
-                                exoPlayer.prepare()
-                                exoPlayer.play()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Red40)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Retry")
-                        }
-                        Button(
-                            onClick = onBack,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.2f)
-                            )
-                        ) {
-                            Text("Go Back")
-                        }
-                    }
-                }
+        AnimatedVisibility(
+            visible = uiState.isMiniEpgVisible,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            MiniEpgOverlay(programs = uiState.currentPrograms)
+        }
+
+        uiState.playerError?.let { error ->
+            ErrorOverlay(error = error, onRetry = { viewModel.clearError(); exoPlayer.prepare() }, onBack = onBack)
+        }
+    }
+}
+
+@ExperimentalSharedTransitionApi
+@Composable
+fun PlayerControlsOverlay(
+    uiState: PlayerUiState,
+    isPlaying: Boolean,
+    onPlayPause: () -> Unit,
+    onBack: () -> Unit,
+    onFavoriteToggle: () -> Unit,
+    onZapNext: () -> Unit,
+    onZapPrev: () -> Unit,
+    onToggleEpg: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.Black.copy(alpha = 0.6f), Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                )
+            )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(24.dp).align(Alignment.TopStart),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack, modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.1f))) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            with(sharedTransitionScope) {
+                AsyncImage(
+                    model = uiState.currentChannel?.logoUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .sharedElement(
+                            rememberSharedContentState(key = "logo-${uiState.currentChannel?.streamUrl}"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        ),
+                    contentScale = ContentScale.Fit
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = uiState.currentChannel?.name ?: "Unknown",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = uiState.currentChannel?.groupTitle ?: "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Red40
+                )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onFavoriteToggle) {
+                Icon(
+                    imageVector = if (uiState.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = null,
+                    tint = if (uiState.isFavorite) Red40 else Color.White
+                )
             }
         }
 
-        // Controls overlay
-        AnimatedVisibility(
-            visible = showControls && playerError == null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize()
+        Row(
+            modifier = Modifier.align(Alignment.Center),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(48.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
+            IconButton(onClick = onZapPrev, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(40.dp))
+            }
+            IconButton(
+                onClick = onPlayPause,
+                modifier = Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f))
             ) {
-                // Top bar: channel name + back button
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .align(Alignment.TopStart),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.4f))
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+            IconButton(onClick = onZapNext, modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(40.dp))
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(24.dp).align(Alignment.BottomStart),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = "LIVE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.background(Red40, RoundedCornerShape(2.dp)).padding(horizontal = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                val currentProgram = uiState.currentPrograms.find { 
+                    val now = System.currentTimeMillis()
+                    it.startTime <= now && it.endTime >= now
+                }
+                Text(
+                    text = currentProgram?.title ?: "No Information Available",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+            
+            Button(
+                onClick = onToggleEpg,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null, tint = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Mini Guide", color = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+fun MiniEpgOverlay(programs: List<EpgProgram>) {
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .background(Color.Black.copy(alpha = 0.9f))
+            .padding(vertical = 16.dp)
+    ) {
+        Column {
+            Text(
+                text = "UPCOMING PROGRAMS",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp)
+            )
+            
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(programs) { program ->
+                    Card(
+                        modifier = Modifier.width(220.dp).fillMaxHeight(),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Text(
-                        text = channelName,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    IconButton(onClick = { viewModel.toggleFavorite() }) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = "Toggle favorite",
-                            tint = if (isFavorite) Red40 else Color.White
-                        )
-                    }
-                }
-
-                // Center play/pause
-                IconButton(
-                    onClick = {
-                        if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                        showControls = true
-                    },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-
-                // Bottom controls: seek bar + volume
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    // Seek bar (only for VOD content with valid duration)
-                    if (duration > 0) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = formatDuration(currentPosition),
-                                color = Color.White,
-                                fontSize = 12.sp
+                                text = "${timeFormat.format(Date(program.startTime))} - ${timeFormat.format(Date(program.endTime))}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Red40
                             )
-                            Slider(
-                                value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                                onValueChange = { fraction ->
-                                    exoPlayer.seekTo((fraction * duration).toLong())
-                                    showControls = true
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Red40,
-                                    activeTrackColor = Red40,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                                )
-                            )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = formatDuration(duration),
+                                text = program.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
                                 color = Color.White,
-                                fontSize = 12.sp
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = program.description,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.6f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                    }
-
-                    // Volume slider
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth(0.4f)
-                            .align(Alignment.End),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Vol",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 11.sp
-                        )
-                        Slider(
-                            value = volume,
-                            onValueChange = {
-                                volume = it
-                                exoPlayer.volume = it
-                                showControls = true
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = Color.White.copy(alpha = 0.8f),
-                                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                            )
-                        )
                     }
                 }
             }
@@ -449,14 +408,27 @@ fun PlayerScreen(
     }
 }
 
-private fun formatDuration(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%02d:%02d", minutes, seconds)
+@Composable
+private fun ErrorOverlay(error: String, onRetry: () -> Unit, onBack: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+            Icon(Icons.Default.ErrorOutline, null, tint = Red40, modifier = Modifier.size(64.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Playback Failed", style = MaterialTheme.typography.headlineSmall, color = Color.White, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(error, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.height(32.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Red40)) {
+                    Text("Retry")
+                }
+                TextButton(onClick = onBack) {
+                    Text("Go Back", color = Color.White)
+                }
+            }
+        }
     }
 }

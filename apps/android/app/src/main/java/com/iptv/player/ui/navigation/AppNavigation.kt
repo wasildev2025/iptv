@@ -1,5 +1,11 @@
 package com.iptv.player.ui.navigation
 
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -10,6 +16,7 @@ import com.iptv.player.ui.activation.ActivationScreen
 import com.iptv.player.ui.home.HomeScreen
 import com.iptv.player.ui.player.PlayerScreen
 import com.iptv.player.ui.settings.SettingsScreen
+import com.iptv.player.ui.epg.EpgScreen
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -17,6 +24,7 @@ import java.nio.charset.StandardCharsets
 object Routes {
     const val ACTIVATION = "activation"
     const val HOME = "home/{playlistUrl}"
+    const val EPG = "epg"
     const val PLAYER = "player/{streamUrl}/{channelName}/{groupTitle}/{logoUrl}"
     const val SETTINGS = "settings"
 
@@ -36,67 +44,89 @@ object Routes {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
 
-    NavHost(
-        navController = navController,
-        startDestination = Routes.ACTIVATION
-    ) {
-        composable(Routes.ACTIVATION) {
-            ActivationScreen(
-                onActivated = { playlistUrl ->
-                    navController.navigate(Routes.home(playlistUrl)) {
-                        popUpTo(Routes.ACTIVATION) { inclusive = true }
-                    }
-                }
-            )
-        }
-
-        composable(
-            route = Routes.HOME,
-            arguments = listOf(
-                navArgument("playlistUrl") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val encodedUrl = backStackEntry.arguments?.getString("playlistUrl") ?: ""
-            val playlistUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
-
-            HomeScreen(
-                playlistUrl = playlistUrl,
-                onChannelClick = { streamUrl, channelName, groupTitle, logoUrl ->
-                    navController.navigate(Routes.player(streamUrl, channelName, groupTitle, logoUrl))
-                },
-                onSettingsClick = {
-                    navController.navigate(Routes.SETTINGS)
-                }
-            )
-        }
-
-        composable(
-            route = Routes.PLAYER,
-            arguments = listOf(
-                navArgument("streamUrl") { type = NavType.StringType },
-                navArgument("channelName") { type = NavType.StringType; defaultValue = "" },
-                navArgument("groupTitle") { type = NavType.StringType; defaultValue = "" },
-                navArgument("logoUrl") { type = NavType.StringType; defaultValue = "" }
-            )
+    SharedTransitionLayout {
+        NavHost(
+            navController = navController,
+            startDestination = Routes.ACTIVATION,
+            enterTransition = { fadeIn() },
+            exitTransition = { fadeOut() }
         ) {
-            PlayerScreen(
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(Routes.SETTINGS) {
-            SettingsScreen(
-                onBack = { navController.popBackStack() },
-                onDeactivated = {
-                    navController.navigate(Routes.ACTIVATION) {
-                        popUpTo(0) { inclusive = true }
+            composable(Routes.ACTIVATION) {
+                ActivationScreen(
+                    onActivated = { playlistUrl ->
+                        navController.navigate(Routes.home(playlistUrl)) {
+                            popUpTo(Routes.ACTIVATION) { inclusive = true }
+                        }
                     }
-                }
-            )
+                )
+            }
+
+            composable(
+                route = Routes.HOME,
+                arguments = listOf(
+                    navArgument("playlistUrl") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val encodedUrl = backStackEntry.arguments?.getString("playlistUrl") ?: ""
+                val playlistUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
+
+                HomeScreen(
+                    playlistUrl = playlistUrl,
+                    onChannelClick = { streamUrl, channelName, groupTitle, logoUrl ->
+                        navController.navigate(Routes.player(streamUrl, channelName, groupTitle, logoUrl))
+                    },
+                    onSettingsClick = {
+                        navController.navigate(Routes.SETTINGS)
+                    },
+                    onEpgClick = {
+                        navController.navigate(Routes.EPG)
+                    },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@composable
+                )
+            }
+
+            composable(Routes.EPG) {
+                EpgScreen(
+                    onChannelClick = { streamUrl, channelName, groupTitle, logoUrl ->
+                        navController.navigate(Routes.player(streamUrl, channelName, groupTitle, logoUrl))
+                    },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@composable
+                )
+            }
+
+            composable(
+                route = Routes.PLAYER,
+                arguments = listOf(
+                    navArgument("streamUrl") { type = NavType.StringType },
+                    navArgument("channelName") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("groupTitle") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("logoUrl") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) {
+                PlayerScreen(
+                    onBack = { navController.popBackStack() },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@composable
+                )
+            }
+
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onDeactivated = {
+                        navController.navigate(Routes.ACTIVATION) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                )
+            }
         }
     }
 }

@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 /**
  * Single snapshot of everything the activation UI needs to render.
@@ -157,10 +159,21 @@ class ActivationViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(deviceState = state)
                 handleDeviceState(app, mac, state)
             }.onFailure { e ->
+                val userMessage = when (e) {
+                    is SocketTimeoutException -> "Server timed out. Please check your internet connection."
+                    is UnknownHostException -> "No internet connection. Please connect to the internet and try again."
+                    else -> {
+                        val msg = e.message ?: ""
+                        when {
+                            msg.contains("401") -> "Device unauthorized. Please contact your reseller."
+                            msg.contains("404") -> "Activation service unavailable (404)."
+                            msg.contains("500") -> "Server error. Please try again later."
+                            else -> msg.takeIf { it.isNotBlank() } ?: "Activation failed. Please check your credentials."
+                        }
+                    }
+                }
                 _ui.value = _ui.value.copy(
-                    state = ActivationState.NotActivated(
-                        e.message ?: "Activation check failed. Please try again."
-                    )
+                    state = ActivationState.NotActivated(userMessage)
                 )
             }
         }

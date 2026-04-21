@@ -3,14 +3,28 @@ package com.iptv.player.ui.player
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.iptv.player.data.model.EpgProgram
 import com.iptv.player.data.model.M3UChannel
 import com.iptv.player.data.repository.IPTVRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class PlayerUiState(
+    val currentChannel: M3UChannel? = null,
+    val isFavorite: Boolean = false,
+    val playerError: String? = null,
+    val isMiniEpgVisible: Boolean = false,
+    val currentPrograms: List<EpgProgram> = emptyList(),
+    val nextChannel: M3UChannel? = null,
+    val previousChannel: M3UChannel? = null
+)
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -18,63 +32,120 @@ class PlayerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    // Note: Navigation component automatically decodes path parameters, 
-    // so we don't need to call URLDecoder.decode manually here.
-    val streamUrl: String = savedStateHandle.get<String>("streamUrl") ?: ""
-    val channelName: String = savedStateHandle.get<String>("channelName") ?: ""
-    val groupTitle: String = savedStateHandle.get<String>("groupTitle") ?: ""
-    val logoUrl: String = savedStateHandle.get<String>("logoUrl") ?: ""
+    private val initialStreamUrl: String = savedStateHandle.get<String>("streamUrl") ?: ""
+    private val initialChannelName: String = savedStateHandle.get<String>("channelName") ?: ""
+    private val initialGroupTitle: String = savedStateHandle.get<String>("groupTitle") ?: ""
+    private val initialLogoUrl: String = savedStateHandle.get<String>("logoUrl") ?: ""
 
-    private val _isFavorite = MutableStateFlow(false)
-    val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
+    private val _uiState = MutableStateFlow(PlayerUiState())
+    val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
-    private val _playerError = MutableStateFlow<String?>(null)
-    val playerError: StateFlow<String?> = _playerError.asStateFlow()
+    private var allChannels: List<M3UChannel> = emptyList()
+    private var epgJob: Job? = null
 
     init {
-        addToRecentHistory()
-        checkFavoriteStatus()
+        val initialChannel = M3UChannel(
+            name = initialChannelName,
+            groupTitle = initialGroupTitle,
+            logoUrl = initialLogoUrl,
+            streamUrl = initialStreamUrl
+        )
+        _uiState.value = _uiState.value.copy(currentChannel = initialChannel)
+        
+        loadChannels()
+        addToRecentHistory(initialChannel)
+        checkFavoriteStatus(initialStreamUrl)
+        loadEpg(initialChannel)
     }
 
-    private fun toM3UChannel() = M3UChannel(
-        name = channelName,
-        groupTitle = groupTitle,
-        logoUrl = logoUrl,
-        streamUrl = streamUrl
-    )
-
-    private fun addToRecentHistory() {
-        if (streamUrl.isBlank()) return
+    private fun loadChannels() {
         viewModelScope.launch {
-            repository.addRecent(toM3UChannel())
+            val cached = repository.getCachedChannels().map { 
+                M3UChannel(it.name, it.groupTitle, it.logoUrl, it.streamUrl, it.tvgId)
+            }
+            allChannels = cached
+            updateAdjacentChannels()
         }
     }
 
-    private fun checkFavoriteStatus() {
-        if (streamUrl.isBlank()) return
-        viewModelScope.launch {
-            _isFavorite.value = repository.isFavorite(streamUrl)
+    private fun updateAdjacentChannels() {
+        val current = _uiState.value.currentChannel ?: return
+        val index = allChannels.indexOfFirst { it.streamUrl == current.streamUrl }
+        if (index != -1) {
+            val prev = if (index > 0) allChannels[index - 1] else allChannels.lastOrNull()
+            val next = if (index < allChannels.size - 1) allChannels[index + 1] else allChannels.firstOrNull()
+            _uiState.value = _uiState.value.copy(previousChannel = prev, nextChannel = next)
         }
     }
 
-    fun toggleFavorite() {
-        if (streamUrl.isBlank()) return
-        viewModelScope.launch {
-            if (_isFavorite.value) {
-                repository.removeFavorite(streamUrl)
-                _isFavorite.value = false
-            } else {
-                repository.addFavorite(toM3UChannel())
-                _isFavorite.value = true
+    fun zapNext() {
+        _uiState.value.nextChannel?.let { switchToChannel(it) }
+    }
+
+    fun zapPrevious() {
+        _uiState.value.previousChannel?.let { switchToChannel(it) }
+    }
+
+    private fun switchToChannel(channel: M3UChannel) {
+        _uiState.value = _uiState.value.copy(
+            currentChannel = channel,
+            playerError = null,
+            isMiniEpgVisible = false
+        )
+        addToRecentHistory(channel)
+        checkFavoriteStatus(channel.streamUrl)
+        loadEpg(channel)
+        updateAdjacentChannels()
+    }
+
+    private fun loadEpg(channel: M3UChannel) {
+        epgJob?.cancel() // Cancel stale EPG requests during rapid zapping
+        epgJob = viewModelScope.launch {
+            repository.getProgramsForChannel(channel.tvgId).collect { programs ->
+                _uiState.value = _uiState.value.copy(currentPrograms = programs)
             }
         }
     }
 
+    private fun addToRecentHistory(channel: M3UChannel) {
+        viewModelScope.launch {
+            repository.addRecent(channel)
+        }
+    }
+
+    private fun checkFavoriteStatus(url: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isFavorite = repository.isFavorite(url))
+        }
+    }
+
+    fun toggleFavorite() {
+        val channel = _uiState.value.currentChannel ?: return
+        viewModelScope.launch {
+            if (_uiState.value.isFavorite) {
+                repository.removeFavorite(channel.streamUrl)
+                _uiState.value = _uiState.value.copy(isFavorite = false)
+            } else {
+                repository.addFavorite(channel)
+                _uiState.value = _uiState.value.copy(isFavorite = true)
+            }
+        }
+    }
+
+    fun toggleMiniEpg() {
+        _uiState.value = _uiState.value.copy(isMiniEpgVisible = !_uiState.value.isMiniEpgVisible)
+    }
+
     fun onPlayerError(error: String) {
-        _playerError.value = error
+        _uiState.value = _uiState.value.copy(playerError = error)
     }
 
     fun clearError() {
-        _playerError.value = null
+        _uiState.value = _uiState.value.copy(playerError = null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        epgJob?.cancel()
     }
 }

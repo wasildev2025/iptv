@@ -3,6 +3,7 @@ package com.iptv.player.data.repository
 import com.iptv.player.data.api.IPTVApiService
 import com.iptv.player.data.auth.DeviceAuthStore
 import com.iptv.player.data.db.ChannelCacheDao
+import com.iptv.player.data.db.EpgDao
 import com.iptv.player.data.db.FavoriteDao
 import com.iptv.player.data.db.RecentDao
 import com.iptv.player.data.model.*
@@ -21,7 +22,8 @@ class IPTVRepository @Inject constructor(
     private val authStore: DeviceAuthStore,
     private val favoriteDao: FavoriteDao,
     private val recentDao: RecentDao,
-    private val channelCacheDao: ChannelCacheDao
+    private val channelCacheDao: ChannelCacheDao,
+    private val epgDao: EpgDao
 ) {
     // --- Device auth / state ---
 
@@ -93,6 +95,16 @@ class IPTVRepository @Inject constructor(
     suspend fun getChannelsByGroup(group: String): List<CachedChannel> = channelCacheDao.getByGroup(group)
     suspend fun searchChannels(query: String): List<CachedChannel> = channelCacheDao.search(query)
     suspend fun getCachedChannelCount(): Int = channelCacheDao.count()
+
+    // --- EPG ---
+
+    suspend fun getProgramsInRange(startTime: Long, endTime: Long): List<EpgProgram> {
+        return epgDao.getProgramsInRange(startTime, endTime)
+    }
+
+    fun getProgramsForChannel(channelId: String): Flow<List<EpgProgram>> {
+        return epgDao.getProgramsForChannel(channelId, System.currentTimeMillis())
+    }
 
     // --- Favorites / recent ---
 
