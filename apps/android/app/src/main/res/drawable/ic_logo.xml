@@ -1,0 +1,57 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+
+    <!-- Outer Glow / Halo -->
+    <path
+        android:pathData="M120,120m-90,0a90,90 0,1 1,180 0a90,90 0,1 1,-180 0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="120"
+                android:centerY="120"
+                android:gradientRadius="90"
+                android:type="radial">
+                <item android:color="#3300E5FF" android:offset="0" />
+                <item android:color="#0000E5FF" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Signal Waves (Resilience Theme) -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M165,120c0,-24.85 -20.15,-45 -45,-45c-24.85,0 -45,20.15 -45,45M180,120c0,-33.14 -26.86,-60 -60,-60c-33.14,0 -60,26.86 -60,60"
+        android:strokeWidth="4"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:alpha="0.3"/>
+
+    <!-- Main Play Symbol (Dynamic Flow) -->
+    <path
+        android:pathData="M100,85 L160,120 L100,155 Z"
+        android:fillColor="#00E5FF">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="100"
+                android:startY="120"
+                android:endX="160"
+                android:endY="120"
+                android:type="linear">
+                <item android:color="#00E5FF" android:offset="0" />
+                <item android:color="#00B8D4" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Flow Accent -->
+    <path
+        android:pathData="M95,120 C95,120 110,110 130,120 C150,130 165,120 165,120"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:alpha="0.5"/>
+
+</vector>
