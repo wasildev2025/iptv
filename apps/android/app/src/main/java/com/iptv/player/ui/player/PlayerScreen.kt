@@ -219,6 +219,11 @@ fun PlayerScreen(
                 PlayerView(ctx).apply {
                     player = exoPlayer
                     useController = false
+                    // Media3 workaround for SurfaceView/Compose synchronization.
+                    // This reduces rendering glitches and out-of-order buffer
+                    // warnings on some devices when PlayerView lives inside an
+                    // AndroidView composable.
+                    setEnableComposeSurfaceSyncWorkaround(true)
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
