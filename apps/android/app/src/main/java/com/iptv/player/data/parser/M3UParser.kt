@@ -127,8 +127,7 @@ object M3UParser {
     fun looksLikeXtreamUrl(rawUrl: String): Boolean {
         if (rawUrl.isBlank()) return false
         val httpUrl = rawUrl.toHttpUrlOrNull() ?: return false
-        return httpUrl.encodedPath.endsWith("/get.php") &&
-            httpUrl.queryParameter("username") != null &&
+        return httpUrl.queryParameter("username") != null &&
             httpUrl.queryParameter("password") != null
     }
 }

@@ -178,7 +178,7 @@ export class XtreamService {
       const parsed = new URL(rawUrl);
       const username = parsed.searchParams.get('username')?.trim();
       const password = parsed.searchParams.get('password')?.trim();
-      const looksXtream = parsed.pathname.endsWith('/get.php') && username && password;
+      const looksXtream = username && password;
       if (!looksXtream) return null;
 
       const requestedOutput = parsed.searchParams.get('output')?.trim().toLowerCase();
