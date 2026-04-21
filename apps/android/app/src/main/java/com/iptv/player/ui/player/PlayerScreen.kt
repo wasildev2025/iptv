@@ -48,7 +48,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
+import com.iptv.player.ui.components.ChannelLogo
 import com.iptv.player.data.model.EpgProgram
 import com.iptv.player.ui.theme.BrandAccent
 import kotlinx.coroutines.delay
@@ -246,8 +246,8 @@ fun PlayerControlsOverlay(
             Spacer(modifier = Modifier.width(16.dp))
             
             with(sharedTransitionScope) {
-                AsyncImage(
-                    model = uiState.currentChannel?.logoUrl,
+                ChannelLogo(
+                    logoUrl = uiState.currentChannel?.logoUrl,
                     contentDescription = null,
                     modifier = Modifier
                         .size(48.dp)

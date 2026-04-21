@@ -76,4 +76,22 @@ class DeviceAuthStore @Inject constructor(
             prefs[AuthKeys.GRACE_ENDS_AT] = graceEndsAt ?: ""
         }
     }
+
+    suspend fun currentPlaylistId(): String? =
+        context.activationDataStore.data.map { it[AuthKeys.PLAYLIST_ID] }.first()
+
+    /** Replace only the selected playlist fields, leaving device/app state untouched. */
+    suspend fun updateSelectedPlaylist(
+        playlistId: String,
+        playlistName: String,
+        playlistUrl: String,
+        playlistXmlUrl: String
+    ) {
+        context.activationDataStore.edit { prefs ->
+            prefs[AuthKeys.PLAYLIST_ID] = playlistId
+            prefs[AuthKeys.PLAYLIST_NAME] = playlistName
+            prefs[AuthKeys.PLAYLIST_URL] = playlistUrl
+            prefs[AuthKeys.PLAYLIST_XML_URL] = playlistXmlUrl
+        }
+    }
 }

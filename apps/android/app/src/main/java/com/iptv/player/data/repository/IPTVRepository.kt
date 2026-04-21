@@ -85,16 +85,35 @@ class IPTVRepository @Inject constructor(
                 )
             }
             channelCacheDao.clearAll()
-            channelCacheDao.insertAll(cached)
+            // Chunk inserts so a single transaction never buffers 50k rows —
+            // keeps SQLite's write page cache happy on low-end devices.
+            cached.chunked(CACHE_INSERT_CHUNK).forEach { batch ->
+                channelCacheDao.insertAll(batch)
+            }
             playlist
         }
     }
 
-    suspend fun getCachedChannels(): List<CachedChannel> = channelCacheDao.getAll()
     suspend fun getCachedGroups(): List<String> = channelCacheDao.getGroups()
     suspend fun getChannelsByGroup(group: String): List<CachedChannel> = channelCacheDao.getByGroup(group)
     suspend fun searchChannels(query: String): List<CachedChannel> = channelCacheDao.search(query)
     suspend fun getCachedChannelCount(): Int = channelCacheDao.count()
+
+    /** Only channels with EPG ids — for the EPG grid. */
+    suspend fun getChannelsWithEpg(): List<CachedChannel> = channelCacheDao.getChannelsWithEpg()
+
+    /** Paginated read — for any screen that wants every channel without blowing the CursorWindow. */
+    suspend fun getCachedChannelsPage(limit: Int, offset: Int): List<CachedChannel> =
+        channelCacheDao.getPaged(limit, offset)
+
+    private companion object {
+        /**
+         * Room's default CursorWindow caps results at ~2 MB. Inserts don't use
+         * CursorWindow, but large single transactions still thrash the
+         * statement cache — 500 rows/batch keeps every write under ~200 KB.
+         */
+        const val CACHE_INSERT_CHUNK = 500
+    }
 
     // --- EPG ---
 

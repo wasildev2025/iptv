@@ -87,6 +87,15 @@ class HomeViewModel @Inject constructor(
     val recentChannels: StateFlow<List<RecentChannel>> = repository.getRecent()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    init {
+        // Observe favorites and recents to rebuild feed dynamically
+        combine(recentChannels, favorites, _allChannels) { recents, favs, channels ->
+            if (channels.isNotEmpty()) {
+                buildHomeFeed(channels, recents, favs)
+            }
+        }.launchIn(viewModelScope)
+    }
+
     fun loadPlaylist(playlistUrl: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -96,9 +105,7 @@ class HomeViewModel @Inject constructor(
             val result = repository.loadPlaylist(playlistUrl)
             result.onSuccess { playlist ->
                 _loadingProgress.value = 0.5f
-                val channels = playlist.channels
-                _allChannels.value = channels
-                buildHomeFeed(channels)
+                _allChannels.value = playlist.channels
             }.onFailure { e ->
                 _isLoading.value = false
                 _feedState.value = _feedState.value.copy(
@@ -108,70 +115,46 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun buildHomeFeed(channels: List<M3UChannel>) {
-        viewModelScope.launch {
-            _loadingProgress.value = 0.6f
-            
-            val feedItems = withContext(Dispatchers.Default) {
-                val items = mutableListOf<HomeFeedItem>()
-                val recents = recentChannels.first()
-                val favs = favorites.first()
+    private suspend fun buildHomeFeed(
+        channels: List<M3UChannel>,
+        recents: List<RecentChannel>,
+        favs: List<FavoriteChannel>
+    ) {
+        withContext(Dispatchers.Default) {
+            val items = mutableListOf<HomeFeedItem>()
 
-                // 1. Hero Section
-                val heroChannel = favs.firstOrNull()?.let { f ->
-                    channels.find { it.streamUrl == f.streamUrl }
-                } ?: channels.firstOrNull()
+            // 1. Hero Section
+            val heroChannel = favs.firstOrNull()?.let { f ->
+                channels.find { it.streamUrl == f.streamUrl }
+            } ?: channels.firstOrNull()
 
-                heroChannel?.let { items.add(HomeFeedItem.Hero(it)) }
-                _loadingProgress.value = 0.7f
+            heroChannel?.let { items.add(HomeFeedItem.Hero(it)) }
 
-                // 2. Continue Watching
-                if (recents.isNotEmpty()) {
-                    items.add(HomeFeedItem.SectionHeader("Continue Watching"))
-                    items.add(HomeFeedItem.ContinueWatchingRow(recents.take(10)))
-                }
+            // 2. Continue Watching
+            if (recents.isNotEmpty()) {
+                items.add(HomeFeedItem.SectionHeader("Continue Watching"))
+                items.add(HomeFeedItem.ContinueWatchingRow(recents.take(15)))
+            }
 
-                // 3. Categories
-                val movieKeywords = listOf("movie", "vod", "film", "cinema")
-                val sportsKeywords = listOf("sport", "football", "soccer", "espn")
+            // 3. Dynamic Categories
+            val grouped = channels.groupBy { it.groupTitle }
+            val sortedGroups = grouped.keys.sortedBy { it.lowercase() }
 
-                val movieChannels = channels.filter { c ->
-                    movieKeywords.any { c.groupTitle.lowercase().contains(it) }
+            for (group in sortedGroups) {
+                val groupChannels = grouped[group] ?: continue
+                if (groupChannels.isNotEmpty()) {
+                    items.add(HomeFeedItem.SectionHeader(group))
+                    items.add(HomeFeedItem.CategoryRow(group, groupChannels.take(20)))
                 }
-                if (movieChannels.isNotEmpty()) {
-                    items.add(HomeFeedItem.SectionHeader("Movies & Cinema"))
-                    items.add(HomeFeedItem.CategoryRow("Movies", movieChannels.take(15)))
-                }
-                _loadingProgress.value = 0.8f
-
-                val sportsChannels = channels.filter { c ->
-                    sportsKeywords.any { c.groupTitle.lowercase().contains(it) }
-                }
-                if (sportsChannels.isNotEmpty()) {
-                    items.add(HomeFeedItem.SectionHeader("Live Sports"))
-                    items.add(HomeFeedItem.CategoryRow("Sports", sportsChannels.take(15)))
-                }
-                _loadingProgress.value = 0.9f
-
-                // 4. Everything Else
-                val otherChannels = channels.filter { c ->
-                    !movieKeywords.any { c.groupTitle.lowercase().contains(it) } &&
-                            !sportsKeywords.any { c.groupTitle.lowercase().contains(it) }
-                }
-                if (otherChannels.isNotEmpty()) {
-                    items.add(HomeFeedItem.SectionHeader("Live TV Channels"))
-                    items.add(HomeFeedItem.ChannelGrid("All Channels", otherChannels.take(100)))
-                }
-                items
             }
 
             _feedState.value = HomeUiState(
                 error = null,
-                feedItems = feedItems,
+                feedItems = items,
                 channelCount = channels.size
             )
-            _loadingProgress.value = 1f
             _isLoading.value = false
+            _loadingProgress.value = 1f
         }
     }
 

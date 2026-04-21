@@ -49,7 +49,11 @@ class EpgViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                val channels = repository.getCachedChannels()
+                // Only channels with a tvg-id are eligible for EPG display —
+                // this strips thousands of VOD rows that would never resolve
+                // to a program, and keeps the SQLite CursorWindow under its
+                // 2 MB hard limit on large Xtream catalogues.
+                val channels = repository.getChannelsWithEpg()
                 val programsList = repository.getProgramsInRange(
                     _uiState.value.startTimeMillis,
                     _uiState.value.endTimeMillis

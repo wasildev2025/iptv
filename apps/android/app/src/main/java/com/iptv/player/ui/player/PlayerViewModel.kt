@@ -60,10 +60,20 @@ class PlayerViewModel @Inject constructor(
 
     private fun loadChannels() {
         viewModelScope.launch {
-            val cached = repository.getCachedChannels().map { 
+            // Only load siblings within the same group — this keeps the query
+            // under SQLite's CursorWindow limit even for Xtream panels with
+            // 50k+ VOD entries, and matches user expectation for zap-next
+            // (next channel within the current category, not the next alphabetically).
+            val currentGroup = _uiState.value.currentChannel?.groupTitle.orEmpty()
+            val cached = if (currentGroup.isBlank()) {
+                // Fallback: first page of all channels.
+                repository.getCachedChannelsPage(limit = 500, offset = 0)
+            } else {
+                repository.getChannelsByGroup(currentGroup)
+            }
+            allChannels = cached.map {
                 M3UChannel(it.name, it.groupTitle, it.logoUrl, it.streamUrl, it.tvgId)
             }
-            allChannels = cached
             updateAdjacentChannels()
         }
     }

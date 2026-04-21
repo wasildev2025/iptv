@@ -95,23 +95,33 @@ fun ChannelCard(
         color = BrandNavyDeep
     ) {
         Box(modifier = Modifier.aspectRatio(aspectRatio)) {
-            // High-quality Image loading with size optimization
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(logoUrl.takeIf { it.isNotBlank() })
-                    .crossfade(true)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .memoryCachePolicy(CachePolicy.ENABLED)
-                    .size(400, 225) // Downsample to card size
-                    .precision(Precision.EXACT)
-                    .placeholder(null)
-                    .error(null)
-                    .build(),
-                contentDescription = name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                alpha = if (isFocused) 1f else 0.85f
-            )
+            // High-quality Image loading with size optimization.
+            // When logoUrl is blank (e.g. Xtream `type=m3u` exports omit tvg-logo)
+            // ChannelLogo renders a neutral placeholder instead of firing a
+            // null request into Coil.
+            if (logoUrl.isNotBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(logoUrl)
+                        .crossfade(true)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .size(400, 225) // Downsample to card size
+                        .precision(Precision.EXACT)
+                        .build(),
+                    contentDescription = name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    alpha = if (isFocused) 1f else 0.85f
+                )
+            } else {
+                ChannelLogo(
+                    logoUrl = null,
+                    contentDescription = name,
+                    modifier = Modifier.fillMaxSize(),
+                    alpha = if (isFocused) 1f else 0.85f
+                )
+            }
 
             // Cinematic Gradient Overlay (Darker at bottom)
             Box(

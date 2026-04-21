@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -164,6 +165,7 @@ class SettingsViewModel @Inject constructor(
 fun SettingsScreen(
     onBack: () -> Unit,
     onDeactivated: () -> Unit,
+    onSwitchPlaylist: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val macAddress by viewModel.macAddress.collectAsState()
@@ -257,6 +259,13 @@ fun SettingsScreen(
 
             // Actions Section
             SectionHeader("Actions")
+
+            SettingsActionItem(
+                icon = Icons.Default.SwapHoriz,
+                label = "Switch Playlist",
+                subtitle = "Pick a different playlist attached to this device",
+                onClick = onSwitchPlaylist
+            )
 
             SettingsActionItem(
                 icon = Icons.Default.Refresh,

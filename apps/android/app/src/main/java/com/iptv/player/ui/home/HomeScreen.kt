@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import com.iptv.player.ui.components.ChannelLogo
 import com.iptv.player.data.model.M3UChannel
 import com.iptv.player.util.ConnectionState
 import com.iptv.player.ui.components.ChannelCard
@@ -389,8 +389,8 @@ fun HeroSection(
             .background(BrandNavyDeep)
     ) {
         with(sharedTransitionScope) {
-            AsyncImage(
-                model = channel.logoUrl,
+            ChannelLogo(
+                logoUrl = channel.logoUrl,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()

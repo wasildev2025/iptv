@@ -16,6 +16,7 @@ import com.iptv.player.ui.activation.ActivationScreen
 import com.iptv.player.ui.home.HomeScreen
 import com.iptv.player.ui.player.PlayerScreen
 import com.iptv.player.ui.settings.SettingsScreen
+import com.iptv.player.ui.settings.SwitchPlaylistScreen
 import com.iptv.player.ui.epg.EpgScreen
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -27,6 +28,7 @@ object Routes {
     const val EPG = "epg"
     const val PLAYER = "player/{streamUrl}/{channelName}/{groupTitle}/{logoUrl}"
     const val SETTINGS = "settings"
+    const val SWITCH_PLAYLIST = "switch-playlist"
 
     fun home(playlistUrl: String): String {
         val encoded = URLEncoder.encode(playlistUrl, StandardCharsets.UTF_8.toString())
@@ -123,6 +125,22 @@ fun AppNavigation() {
                     onDeactivated = {
                         navController.navigate(Routes.ACTIVATION) {
                             popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onSwitchPlaylist = {
+                        navController.navigate(Routes.SWITCH_PLAYLIST)
+                    }
+                )
+            }
+
+            composable(Routes.SWITCH_PLAYLIST) {
+                SwitchPlaylistScreen(
+                    onBack = { navController.popBackStack() },
+                    onPicked = { playlistUrl ->
+                        // Replace Home in the stack so the new playlist loads fresh
+                        // and the user can't back-navigate to the stale one.
+                        navController.navigate(Routes.home(playlistUrl)) {
+                            popUpTo(Routes.HOME) { inclusive = true }
                         }
                     }
                 )

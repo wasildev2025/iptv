@@ -11,6 +11,7 @@ import { ChangeDomainDto } from './dto/change-domain.dto';
 import { UpdatePlaylistDto } from './dto/update-playlist.dto';
 import { Prisma } from '@prisma/client';
 import { PlaylistPinService } from '../public/playlist-pin.service';
+import { normalizeXtreamPlaylistUrl } from './playlist-url.util';
 
 @Injectable()
 export class PlaylistsService {
@@ -41,6 +42,7 @@ export class PlaylistsService {
     }
 
     const pinHash = await this.pinService.hashForStorage(dto.pin);
+    const normalizedUrl = normalizeXtreamPlaylistUrl(dto.playlistUrl);
 
     const playlist = await this.prisma.$transaction(async (tx) => {
       const created = await tx.playlist.create({
@@ -49,7 +51,7 @@ export class PlaylistsService {
           macAddress: dto.macAddress,
           appId: dto.appId,
           appPlatform: dto.appPlatform ?? device.app.slug,
-          playlistUrl: dto.playlistUrl,
+          playlistUrl: normalizedUrl,
           playlistName: dto.playlistName,
           xmlUrl: dto.xmlUrl || '',
           pinHash: pinHash ?? undefined,
@@ -61,7 +63,7 @@ export class PlaylistsService {
       // public/check-activation response carries it without extra lookups.
       await tx.device.update({
         where: { id: device.id },
-        data: { playlistUrl: dto.playlistUrl },
+        data: { playlistUrl: normalizedUrl },
       });
 
       return created;
@@ -316,11 +318,15 @@ export class PlaylistsService {
       pinHashUpdate = dto.pin === '' ? null : await this.pinService.hashForStorage(dto.pin);
     }
 
+    const normalizedUrl = dto.playlistUrl
+      ? normalizeXtreamPlaylistUrl(dto.playlistUrl)
+      : undefined;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.playlist.update({
         where: { id },
         data: {
-          playlistUrl: dto.playlistUrl ?? undefined,
+          playlistUrl: normalizedUrl ?? undefined,
           playlistName: dto.playlistName ?? undefined,
           xmlUrl: dto.xmlUrl ?? undefined,
           pinHash: pinHashUpdate,
@@ -328,7 +334,7 @@ export class PlaylistsService {
         },
       });
 
-      if (dto.playlistUrl && dto.playlistUrl !== existing.playlistUrl) {
+      if (normalizedUrl && normalizedUrl !== existing.playlistUrl) {
         await tx.device.updateMany({
           where: {
             userId,
@@ -336,7 +342,7 @@ export class PlaylistsService {
             appId: existing.appId,
             playlistUrl: existing.playlistUrl,
           },
-          data: { playlistUrl: dto.playlistUrl },
+          data: { playlistUrl: normalizedUrl },
         });
       }
 
