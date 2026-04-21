@@ -67,8 +67,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iptv.player.BuildConfig
 import com.iptv.player.data.repository.IPTVRepository
-import com.iptv.player.ui.activation.PrefsKeys
-import com.iptv.player.ui.activation.activationDataStore
+import com.iptv.player.data.auth.AuthKeys
+import com.iptv.player.data.auth.activationDataStore
 import com.iptv.player.ui.theme.Red40
 import com.iptv.player.ui.theme.SurfaceDark
 import com.iptv.player.ui.theme.SurfaceDarkElevated
@@ -109,8 +109,8 @@ class SettingsViewModel @Inject constructor(
     private fun loadPrefs() {
         viewModelScope.launch {
             val prefs = context.activationDataStore.data.first()
-            _isActivated.value = prefs[PrefsKeys.IS_ACTIVATED] ?: false
-            _playlistUrl.value = prefs[PrefsKeys.PLAYLIST_URL] ?: ""
+            _isActivated.value = prefs[AuthKeys.IS_ACTIVATED] ?: false
+            _playlistUrl.value = prefs[AuthKeys.PLAYLIST_URL] ?: ""
         }
     }
 
@@ -146,9 +146,10 @@ class SettingsViewModel @Inject constructor(
 
     fun deactivate(onDeactivated: () -> Unit) {
         viewModelScope.launch {
+            // Revoke server-side first so a stolen token is useless, then wipe locally.
+            runCatching { repository.revokeDeviceToken() }
             context.activationDataStore.edit { it.clear() }
             repository.clearRecent()
-            // Clear favorites
             val favs = repository.getFavorites().first()
             favs.forEach { fav ->
                 repository.removeFavorite(fav.streamUrl)

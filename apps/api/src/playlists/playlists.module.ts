@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { PlaylistsService } from './playlists.service';
 import { PlaylistsController } from './playlists.controller';
 import { PrismaModule } from '../prisma/prisma.module';
+import { PublicModule } from '../public/public.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, PublicModule],
   controllers: [PlaylistsController],
   providers: [PlaylistsService],
   exports: [PlaylistsService],

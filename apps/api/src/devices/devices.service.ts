@@ -688,20 +688,24 @@ export class DevicesService {
     );
   }
 
-  // --- Cron: Auto-expire yearly devices past their expiry date ---
+  // --- Cron: Auto-expire yearly devices past their expiry + grace window ---
   @Cron(CronExpression.EVERY_HOUR)
   async handleExpiredDevices() {
+    const graceDays = Number(process.env.GRACE_PERIOD_DAYS ?? 3);
+    const cutoff = new Date(Date.now() - graceDays * 24 * 60 * 60 * 1000);
     const result = await this.prisma.device.updateMany({
       where: {
         status: { in: ['active', 'trial'] },
-        expiresAt: { lt: new Date() },
+        expiresAt: { lt: cutoff },
         NOT: { packageType: 'lifetime' },
       },
       data: { status: 'expired' },
     });
 
     if (result.count > 0) {
-      this.logger.log(`Auto-expired ${result.count} device(s)`);
+      this.logger.log(
+        `Auto-expired ${result.count} device(s) past ${graceDays}-day grace window`,
+      );
     }
   }
 

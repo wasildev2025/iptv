@@ -2,45 +2,68 @@ package com.iptv.player.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.google.gson.annotations.SerializedName
 
-// API response models
-data class DeviceCheckResponse(
+// --- API: device binding & state ----------------------------------------------
+
+data class BindDeviceRequest(
+    val macAddress: String,
+    val appId: String? = null,
+    val appSlug: String? = null
+)
+
+data class BindDeviceResponse(
+    val token: String,
+    val state: DeviceState
+)
+
+data class DeviceState(
+    val device: DeviceSummary,
+    val app: AppInfo,
+    val playlists: List<PlaylistInfo>
+)
+
+data class DeviceSummary(
     val id: String,
     val macAddress: String,
     val status: String,
     val packageType: String,
+    val activatedAt: String?,
     val expiresAt: String?,
-    val playlistUrl: String?,
-    val app: AppInfo?
+    val graceEndsAt: String?,
+    val isInGrace: Boolean = false
 )
 
 data class AppInfo(
     val id: String,
     val name: String,
     val slug: String,
-    val iconUrl: String
+    val iconUrl: String = ""
 )
 
-data class ActivationRequest(
-    val macAddress: String,
-    val appId: String? = null,
-    val appSlug: String? = null
+data class PlaylistInfo(
+    val id: String,
+    val name: String,
+    val url: String,
+    val xmlUrl: String = "",
+    val isProtected: Boolean = false,
+    val createdAt: String? = null
 )
 
 data class AppsListRequest(
     val macAddress: String? = null
 )
 
-data class PlaylistResponse(
-    val id: String,
-    val macAddress: String,
-    val playlistUrl: String,
-    val playlistName: String,
-    val appPlatform: String
+data class VerifyPinRequest(
+    val playlistId: String,
+    val pin: String
 )
 
-// M3U parsed models
+data class VerifyPinResponse(
+    val valid: Boolean
+)
+
+// --- M3U parsed models --------------------------------------------------------
+
 data class M3UPlaylist(
     val channels: List<M3UChannel>,
     val groups: List<String>
@@ -53,10 +76,11 @@ data class M3UChannel(
     val streamUrl: String,
     val tvgId: String = "",
     val tvgName: String = "",
-    val isLive: Boolean = true  // vs VOD
+    val isLive: Boolean = true
 )
 
-// Room entities
+// --- Room entities ------------------------------------------------------------
+
 @Entity(tableName = "favorites")
 data class FavoriteChannel(
     @PrimaryKey val streamUrl: String,
@@ -86,7 +110,8 @@ data class CachedChannel(
     val cachedAt: Long = System.currentTimeMillis()
 )
 
-// EPG models
+// --- EPG models ---------------------------------------------------------------
+
 data class EpgProgram(
     val channelId: String,
     val title: String,

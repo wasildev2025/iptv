@@ -10,12 +10,16 @@ import { ResetPlaylistDto } from './dto/reset-playlist.dto';
 import { ChangeDomainDto } from './dto/change-domain.dto';
 import { UpdatePlaylistDto } from './dto/update-playlist.dto';
 import { Prisma } from '@prisma/client';
+import { PlaylistPinService } from '../public/playlist-pin.service';
 
 @Injectable()
 export class PlaylistsService {
   private readonly logger = new Logger(PlaylistsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pinService: PlaylistPinService,
+  ) {}
 
   async save(userId: string, dto: SavePlaylistDto) {
     // Verify the device exists for this MAC + app and belongs to the user
@@ -36,6 +40,8 @@ export class PlaylistsService {
       );
     }
 
+    const pinHash = await this.pinService.hashForStorage(dto.pin);
+
     const playlist = await this.prisma.$transaction(async (tx) => {
       const created = await tx.playlist.create({
         data: {
@@ -46,7 +52,7 @@ export class PlaylistsService {
           playlistUrl: dto.playlistUrl,
           playlistName: dto.playlistName,
           xmlUrl: dto.xmlUrl || '',
-          pin: dto.pin || undefined,
+          pinHash: pinHash ?? undefined,
           isProtected: dto.isProtected ?? false,
         },
       });
@@ -65,7 +71,7 @@ export class PlaylistsService {
       `Playlist "${dto.playlistName}" saved for device ${dto.macAddress} by user ${userId}`,
     );
 
-    return playlist;
+    return stripPinHash(playlist);
   }
 
   async reset(userId: string, dto: ResetPlaylistDto, ipAddress?: string) {
@@ -210,15 +216,35 @@ export class PlaylistsService {
       where.appId = query.app_id;
     }
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.playlist.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          userId: true,
+          macAddress: true,
+          appId: true,
+          appPlatform: true,
+          playlistUrl: true,
+          playlistName: true,
+          xmlUrl: true,
+          isProtected: true,
+          pinHash: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       }),
       this.prisma.playlist.count({ where }),
     ]);
+
+    // Never ship the hash to the dashboard — surface a boolean flag instead.
+    const data = rows.map(({ pinHash, ...rest }) => ({
+      ...rest,
+      hasPin: !!pinHash,
+    }));
 
     return {
       data,
@@ -283,6 +309,13 @@ export class PlaylistsService {
       throw new NotFoundException('Playlist not found');
     }
 
+    // Only hash the PIN if the caller actually sent one. `undefined` means
+    // "leave unchanged"; an empty string means "clear it".
+    let pinHashUpdate: string | null | undefined = undefined;
+    if (dto.pin !== undefined) {
+      pinHashUpdate = dto.pin === '' ? null : await this.pinService.hashForStorage(dto.pin);
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.playlist.update({
         where: { id },
@@ -290,7 +323,7 @@ export class PlaylistsService {
           playlistUrl: dto.playlistUrl ?? undefined,
           playlistName: dto.playlistName ?? undefined,
           xmlUrl: dto.xmlUrl ?? undefined,
-          pin: dto.pin ?? undefined,
+          pinHash: pinHashUpdate,
           isProtected: dto.isProtected ?? undefined,
         },
       });
@@ -314,7 +347,7 @@ export class PlaylistsService {
       `Playlist ${id} updated by user ${userId} (device ${existing.macAddress})`,
     );
 
-    return updated;
+    return stripPinHash(updated);
   }
 
   async remove(userId: string, id: string) {
@@ -357,4 +390,13 @@ export class PlaylistsService {
 
     return { message: 'Playlist deleted successfully' };
   }
+}
+
+type PlaylistRowLike = { pinHash?: string | null } & Record<string, unknown>;
+
+function stripPinHash<T extends PlaylistRowLike>(
+  row: T,
+): Omit<T, 'pinHash'> & { hasPin: boolean } {
+  const { pinHash, ...rest } = row;
+  return { ...rest, hasPin: !!pinHash };
 }

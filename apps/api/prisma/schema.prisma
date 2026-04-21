@@ -120,12 +120,28 @@ model Device {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
+  tokens         DeviceToken[]
+
   @@unique([macAddress, appId], name: "unique_mac_per_app")
   @@index([userId])
   @@index([macAddress])
   @@index([status])
   @@index([expiresAt])
   @@map("devices")
+}
+
+model DeviceToken {
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique @map("token_hash")
+  deviceId   String    @map("device_id")
+  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  userAgent  String    @default("") @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  @@index([deviceId])
+  @@map("device_tokens")
 }
 
 model App {
@@ -258,7 +274,7 @@ model Playlist {
   playlistUrl   String   @map("playlist_url")
   playlistName  String   @default("") @map("playlist_name")
   xmlUrl        String   @default("") @map("xml_url")
-  pin           String?
+  pinHash       String?  @map("pin_hash")
   isProtected   Boolean  @default(false) @map("is_protected")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")

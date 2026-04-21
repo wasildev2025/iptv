@@ -2,12 +2,22 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
+  Headers,
   NotFoundException,
   Post,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
+import { DeviceTokenService } from './device-token.service';
+import type { ResolvedDeviceToken } from './device-token.service';
+import { DeviceTokenGuard } from './guards/device-token.guard';
+import { CurrentDevice } from './decorators/current-device.decorator';
+import { DeviceStateBuilder } from './device-state.builder';
+import type { DeviceStateResponse } from './device-state.builder';
+import { PlaylistPinService } from './playlist-pin.service';
 
 const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
 
@@ -40,63 +50,63 @@ function toIsoFromUnix(value: unknown): string | null {
   return new Date(num * 1000).toISOString();
 }
 
+function normalizeMac(raw: string | undefined): string {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    throw new BadRequestException('macAddress is required');
+  }
+  if (!MAC_REGEX.test(trimmed)) {
+    throw new BadRequestException(
+      'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)',
+    );
+  }
+  return trimmed.toUpperCase().replace(/-/g, ':');
+}
+
+/**
+ * Decide whether a device is allowed to bind / stay bound.
+ * `active` and `trial` are always allowed.
+ * `expired` is allowed iff we are still inside the grace window.
+ * Anything else (disabled, or expired past grace) is rejected.
+ */
+function assertDeviceUsable(device: {
+  status: string;
+  expiresAt: Date | null;
+  packageType: string;
+}): { isInGrace: boolean } {
+  if (device.status === 'active' || device.status === 'trial') {
+    return { isInGrace: false };
+  }
+  if (device.status !== 'expired') {
+    throw new ForbiddenException(`Device is ${device.status}`);
+  }
+  // Expired — check grace window.
+  if (!device.expiresAt || device.packageType === 'lifetime') {
+    throw new ForbiddenException('Device is expired');
+  }
+  const graceDays = Number(process.env.GRACE_PERIOD_DAYS ?? 3);
+  const graceEndsAt = new Date(
+    device.expiresAt.getTime() + graceDays * 24 * 60 * 60 * 1000,
+  );
+  if (graceEndsAt.getTime() <= Date.now()) {
+    throw new ForbiddenException('Device is expired');
+  }
+  return { isInGrace: true };
+}
+
 @ApiTags('Public')
 @Controller('api/public')
 export class PublicController {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private tokens: DeviceTokenService,
+    private stateBuilder: DeviceStateBuilder,
+    private pinService: PlaylistPinService,
+  ) {}
 
-  @Post('check-activation')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @ApiOperation({
-    summary: 'Public endpoint for Android/end-user apps to check MAC activation',
-  })
-  async checkActivation(
-    @Body() body: { macAddress: string; appSlug?: string; appId?: string },
-  ) {
-    const raw = body?.macAddress?.trim();
-    if (!raw) {
-      throw new BadRequestException('macAddress is required');
-    }
-    if (!MAC_REGEX.test(raw)) {
-      throw new BadRequestException(
-        'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)',
-      );
-    }
-    const mac = raw.toUpperCase().replace(/-/g, ':');
-
-    const where: Record<string, unknown> = {
-      OR: [{ macAddress: mac }, { macAddressAlt: mac }],
-    };
-
-    if (body.appId) {
-      where.appId = body.appId;
-    } else if (body.appSlug) {
-      where.app = { slug: body.appSlug };
-    }
-
-    const device = await this.prisma.device.findFirst({
-      where,
-      include: {
-        app: { select: { id: true, name: true, slug: true, iconUrl: true } },
-      },
-      orderBy: { activatedAt: 'desc' },
-    });
-
-    if (!device) {
-      throw new NotFoundException('No activation found for this MAC');
-    }
-
-    return {
-      id: device.id,
-      macAddress: device.macAddress,
-      status: device.status,
-      packageType: device.packageType,
-      activatedAt: device.activatedAt,
-      expiresAt: device.expiresAt,
-      playlistUrl: device.playlistUrl,
-      app: device.app,
-    };
-  }
+  // ---------------------------------------------------------------------------
+  // Discovery (no auth) — only returns app name/icon, not credentials.
+  // ---------------------------------------------------------------------------
 
   @Post('apps')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
@@ -115,12 +125,7 @@ export class PublicController {
       });
     }
 
-    if (!MAC_REGEX.test(raw)) {
-      throw new BadRequestException(
-        'Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)',
-      );
-    }
-    const mac = raw.toUpperCase().replace(/-/g, ':');
+    const mac = normalizeMac(raw);
 
     const devices = await this.prisma.device.findMany({
       where: {
@@ -135,7 +140,12 @@ export class PublicController {
     });
 
     const seen = new Set<string>();
-    const uniqueApps: { id: string; name: string; slug: string; iconUrl: string | null }[] = [];
+    const uniqueApps: {
+      id: string;
+      name: string;
+      slug: string;
+      iconUrl: string | null;
+    }[] = [];
     for (const d of devices) {
       if (d.app && !seen.has(d.app.id)) {
         seen.add(d.app.id);
@@ -144,6 +154,155 @@ export class PublicController {
     }
     return uniqueApps;
   }
+
+  // ---------------------------------------------------------------------------
+  // First-time bind — exchange MAC + appId for a device token.
+  // ---------------------------------------------------------------------------
+
+  @Post('bind-device')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Bind an Android device by (MAC, app) and issue a long-lived device token used for all subsequent public calls.',
+  })
+  async bindDevice(
+    @Body() body: { macAddress?: string; appId?: string; appSlug?: string },
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<{ token: string; state: DeviceStateResponse }> {
+    const mac = normalizeMac(body?.macAddress);
+
+    if (!body?.appId && !body?.appSlug) {
+      throw new BadRequestException('appId or appSlug is required');
+    }
+
+    const device = await this.prisma.device.findFirst({
+      where: {
+        OR: [{ macAddress: mac }, { macAddressAlt: mac }],
+        ...(body.appId
+          ? { appId: body.appId }
+          : { app: { slug: body.appSlug } }),
+      },
+      orderBy: { activatedAt: 'desc' },
+    });
+
+    if (!device) {
+      throw new NotFoundException('No activation found for this MAC');
+    }
+
+    assertDeviceUsable(device);
+
+    const token = await this.tokens.issue(device.id, userAgent ?? '');
+    const state = await this.stateBuilder.build(device.id);
+    if (!state) {
+      throw new NotFoundException('No activation found for this MAC');
+    }
+    return { token, state };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Refresh state — called whenever the Android app resumes.
+  // ---------------------------------------------------------------------------
+
+  @Post('check-activation')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @UseGuards(DeviceTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Return the current device state (status, playlists, grace info). Requires a device token from /bind-device.',
+  })
+  async checkActivation(
+    @CurrentDevice() auth: ResolvedDeviceToken,
+  ): Promise<DeviceStateResponse> {
+    const device = await this.prisma.device.findUnique({
+      where: { id: auth.deviceId },
+      select: {
+        id: true,
+        status: true,
+        expiresAt: true,
+        packageType: true,
+      },
+    });
+    if (!device) {
+      // Device deleted under us — nuke the token too.
+      await this.tokens.revokeById(auth.tokenRecordId);
+      throw new NotFoundException('Device no longer exists');
+    }
+    assertDeviceUsable(device);
+    const state = await this.stateBuilder.build(auth.deviceId);
+    if (!state) {
+      throw new NotFoundException('Device no longer exists');
+    }
+    return state;
+  }
+
+  // ---------------------------------------------------------------------------
+  // PIN verification — never returns the hash, just a boolean.
+  // ---------------------------------------------------------------------------
+
+  @Post('verify-playlist-pin')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @UseGuards(DeviceTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Verify a PIN for a protected playlist. Returns { valid } only — never the stored hash.',
+  })
+  async verifyPlaylistPin(
+    @CurrentDevice() auth: ResolvedDeviceToken,
+    @Body() body: { playlistId?: string; pin?: string },
+  ): Promise<{ valid: boolean }> {
+    if (!body?.playlistId || typeof body.playlistId !== 'string') {
+      throw new BadRequestException('playlistId is required');
+    }
+    if (!body.pin || typeof body.pin !== 'string') {
+      throw new BadRequestException('pin is required');
+    }
+
+    // Make sure the playlist belongs to this device (same user+MAC+app).
+    const device = await this.prisma.device.findUnique({
+      where: { id: auth.deviceId },
+      select: { userId: true, macAddress: true, appId: true },
+    });
+    if (!device) {
+      throw new NotFoundException('Device no longer exists');
+    }
+    const playlist = await this.prisma.playlist.findFirst({
+      where: {
+        id: body.playlistId,
+        userId: device.userId,
+        macAddress: device.macAddress,
+        appId: device.appId,
+      },
+      select: { id: true },
+    });
+    if (!playlist) {
+      throw new NotFoundException('Playlist not found for this device');
+    }
+
+    const valid = await this.pinService.verify(playlist.id, body.pin);
+    return { valid };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Explicit sign-out.
+  // ---------------------------------------------------------------------------
+
+  @Post('revoke-device-token')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @UseGuards(DeviceTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Revoke the calling device token.' })
+  async revokeToken(
+    @CurrentDevice() auth: ResolvedDeviceToken,
+  ): Promise<{ revoked: true }> {
+    await this.tokens.revokeById(auth.tokenRecordId);
+    return { revoked: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Free IPTV Status Checker — unchanged from previous pass.
+  // ---------------------------------------------------------------------------
 
   @Post('check-playlist')
   @Throttle({ default: { limit: 10, ttl: 60000 } })

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.iptv.player.BuildConfig
 import com.iptv.player.data.api.IPTVApiService
+import com.iptv.player.data.auth.DeviceTokenInterceptor
 import com.iptv.player.data.db.AppDatabase
 import com.iptv.player.data.db.ChannelCacheDao
 import com.iptv.player.data.db.FavoriteDao
@@ -26,10 +27,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(
+        deviceTokenInterceptor: DeviceTokenInterceptor
+    ): OkHttpClient {
         return OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor(deviceTokenInterceptor)
             .addInterceptor(
                 HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.BODY
