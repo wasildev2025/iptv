@@ -73,9 +73,12 @@ fun PlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
     var isBuffering by remember { mutableStateOf(true) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(showControls, uiState.isMiniEpgVisible) {
-        if (showControls && !uiState.isMiniEpgVisible) {
+    LaunchedEffect(showControls, uiState.isMiniEpgVisible, showSettingsSheet) {
+        // Keep controls visible while Mini EPG or Settings sheet is open so
+        // the user doesn't have to tap to get them back after closing either.
+        if (showControls && !uiState.isMiniEpgVisible && !showSettingsSheet) {
             delay(5000)
             showControls = false
         }
@@ -167,12 +170,16 @@ fun PlayerScreen(
                     )
                 }
             },
-            modifier = Modifier.fillMaxSize().clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) {
-                showControls = !showControls
-            }
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Gesture overlay — single-tap toggles controls, double-tap seeks ±10s
+        // with a ripple ring. Sits above PlayerView, below the controls, so
+        // taps on icon buttons reach them first and only empty areas fall
+        // through to this overlay.
+        DoubleTapSeekOverlay(
+            player = exoPlayer,
+            onSingleTap = { showControls = !showControls }
         )
 
         if (isBuffering) {
@@ -185,6 +192,7 @@ fun PlayerScreen(
             exit = fadeOut()
         ) {
             PlayerControlsOverlay(
+                player = exoPlayer,
                 uiState = uiState,
                 isPlaying = isPlaying,
                 onPlayPause = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
@@ -193,8 +201,16 @@ fun PlayerScreen(
                 onZapNext = { viewModel.zapNext() },
                 onZapPrev = { viewModel.zapPrevious() },
                 onToggleEpg = { viewModel.toggleMiniEpg() },
+                onOpenSettings = { showSettingsSheet = true },
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
+            )
+        }
+
+        if (showSettingsSheet) {
+            PlayerSettingsSheet(
+                player = exoPlayer,
+                onDismiss = { showSettingsSheet = false }
             )
         }
 
@@ -213,9 +229,11 @@ fun PlayerScreen(
     }
 }
 
+@OptIn(UnstableApi::class)
 @ExperimentalSharedTransitionApi
 @Composable
 fun PlayerControlsOverlay(
+    player: Player,
     uiState: PlayerUiState,
     isPlaying: Boolean,
     onPlayPause: () -> Unit,
@@ -224,6 +242,7 @@ fun PlayerControlsOverlay(
     onZapNext: () -> Unit,
     onZapPrev: () -> Unit,
     onToggleEpg: () -> Unit,
+    onOpenSettings: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
@@ -278,9 +297,16 @@ fun PlayerControlsOverlay(
             IconButton(onClick = onFavoriteToggle) {
                 Icon(
                     imageVector = if (uiState.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = null,
+                    contentDescription = "Favourite",
                     tint = if (uiState.isFavorite) BrandAccent else Color.White
                 )
+            }
+            Spacer(Modifier.width(4.dp))
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.1f))
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
             }
         }
 
@@ -308,40 +334,62 @@ fun PlayerControlsOverlay(
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(24.dp).align(Alignment.BottomStart),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 18.dp)
+                .align(Alignment.BottomStart)
         ) {
-            Column {
-                Text(
-                    text = "LIVE",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    modifier = Modifier.background(BrandAccent, RoundedCornerShape(2.dp)).padding(horizontal = 4.dp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                val currentProgram = uiState.currentPrograms.find { 
-                    val now = System.currentTimeMillis()
-                    it.startTime <= now && it.endTime >= now
-                }
-                Text(
-                    text = currentProgram?.title ?: "No Information Available",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-            
-            Button(
-                onClick = onToggleEpg,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(8.dp)
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null, tint = Color.White)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Mini Guide", color = Color.White)
+                Column(modifier = Modifier.weight(1f)) {
+                    if (!isSeekable(player)) {
+                        Text(
+                            text = "LIVE",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier
+                                .background(BrandAccent, RoundedCornerShape(2.dp))
+                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    val currentProgram = uiState.currentPrograms.find {
+                        val now = System.currentTimeMillis()
+                        it.startTime <= now && it.endTime >= now
+                    }
+                    Text(
+                        text = currentProgram?.title ?: "No Information Available",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                Button(
+                    onClick = onToggleEpg,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Mini Guide", color = Color.White)
+                }
+            }
+
+            // Scrub bar only appears when the current media reports a real
+            // duration — e.g. VOD / catchup. Live streams skip this.
+            if (isSeekable(player)) {
+                Spacer(Modifier.height(10.dp))
+                PlayerProgressBar(player = player)
             }
         }
     }

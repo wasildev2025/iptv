@@ -18,6 +18,7 @@ import { CurrentDevice } from './decorators/current-device.decorator';
 import { DeviceStateBuilder } from './device-state.builder';
 import type { DeviceStateResponse } from './device-state.builder';
 import { PlaylistPinService } from './playlist-pin.service';
+import { XtreamService } from './xtream.service';
 
 const MAC_REGEX = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
 
@@ -102,6 +103,7 @@ export class PublicController {
     private tokens: DeviceTokenService,
     private stateBuilder: DeviceStateBuilder,
     private pinService: PlaylistPinService,
+    private xtream: XtreamService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -298,6 +300,66 @@ export class PublicController {
   ): Promise<{ revoked: true }> {
     await this.tokens.revokeById(auth.tokenRecordId);
     return { revoked: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Xtream proxy endpoints — keep large catalog processing off the device.
+  // ---------------------------------------------------------------------------
+
+  @Post('xtream/home')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @UseGuards(DeviceTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Return a lightweight Xtream home payload: featured live channels plus a small set of category rails.',
+  })
+  async xtreamHome(@Body() body: { url?: string }) {
+    const url = body?.url?.trim();
+    if (!url) {
+      throw new BadRequestException('url is required');
+    }
+    return this.xtream.loadHome(url);
+  }
+
+  @Post('xtream/category')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @UseGuards(DeviceTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Return live streams for a single Xtream category. Lets clients paginate category-by-category instead of loading the full catalogue.',
+  })
+  async xtreamCategory(@Body() body: { url?: string; categoryId?: string }) {
+    const url = body?.url?.trim();
+    const categoryId = body?.categoryId?.trim();
+    if (!url) {
+      throw new BadRequestException('url is required');
+    }
+    if (!categoryId) {
+      throw new BadRequestException('categoryId is required');
+    }
+    return { channels: await this.xtream.loadCategory(url, categoryId) };
+  }
+
+  @Post('xtream/search')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @UseGuards(DeviceTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Search Xtream live streams server-side and return only the matching subset to the Android client.',
+  })
+  async xtreamSearch(@Body() body: { url?: string; query?: string }) {
+    const url = body?.url?.trim();
+    const query = body?.query?.trim();
+    if (!url) {
+      throw new BadRequestException('url is required');
+    }
+    if (!query) {
+      throw new BadRequestException('query is required');
+    }
+    return { results: await this.xtream.search(url, query) };
   }
 
   // ---------------------------------------------------------------------------

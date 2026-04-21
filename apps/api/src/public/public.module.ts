@@ -4,6 +4,7 @@ import { DeviceTokenService } from './device-token.service';
 import { PlaylistPinService } from './playlist-pin.service';
 import { DeviceStateBuilder } from './device-state.builder';
 import { DeviceTokenGuard } from './guards/device-token.guard';
+import { XtreamService } from './xtream.service';
 
 @Module({
   controllers: [PublicController],
@@ -12,6 +13,7 @@ import { DeviceTokenGuard } from './guards/device-token.guard';
     PlaylistPinService,
     DeviceStateBuilder,
     DeviceTokenGuard,
+    XtreamService,
   ],
   exports: [DeviceTokenService, PlaylistPinService],
 })

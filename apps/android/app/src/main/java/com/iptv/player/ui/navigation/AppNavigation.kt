@@ -18,6 +18,7 @@ import com.iptv.player.ui.player.PlayerScreen
 import com.iptv.player.ui.settings.SettingsScreen
 import com.iptv.player.ui.settings.SwitchPlaylistScreen
 import com.iptv.player.ui.epg.EpgScreen
+import com.iptv.player.ui.favorites.FavoriteScreen
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -26,6 +27,7 @@ object Routes {
     const val ACTIVATION = "activation"
     const val HOME = "home/{playlistUrl}"
     const val EPG = "epg"
+    const val FAVORITES = "favorites"
     const val PLAYER = "player/{streamUrl}/{channelName}/{groupTitle}/{logoUrl}"
     const val SETTINGS = "settings"
     const val SWITCH_PLAYLIST = "switch-playlist"
@@ -88,6 +90,9 @@ fun AppNavigation() {
                     onEpgClick = {
                         navController.navigate(Routes.EPG)
                     },
+                    onFavoritesClick = {
+                        navController.navigate(Routes.FAVORITES)
+                    },
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable
                 )
@@ -98,6 +103,17 @@ fun AppNavigation() {
                     onChannelClick = { streamUrl, channelName, groupTitle, logoUrl ->
                         navController.navigate(Routes.player(streamUrl, channelName, groupTitle, logoUrl))
                     },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@composable
+                )
+            }
+
+            composable(Routes.FAVORITES) {
+                FavoriteScreen(
+                    onChannelClick = { streamUrl, channelName, groupTitle, logoUrl ->
+                        navController.navigate(Routes.player(streamUrl, channelName, groupTitle, logoUrl))
+                    },
+                    onBack = { navController.popBackStack() },
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable
                 )

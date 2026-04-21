@@ -8,8 +8,8 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.iptv.player.ui.theme.BrandNavyDeep
 import com.iptv.player.ui.theme.SurfaceDarkElevated
-import com.iptv.player.ui.theme.SurfaceDarkVariant
 
 fun Modifier.shimmerEffect(): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "shimmer")
@@ -18,7 +18,7 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         targetValue = 1000f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 1000,
+                durationMillis = 1200, // Slightly slower, more premium feel
                 easing = FastOutSlowInEasing
             ),
             repeatMode = RepeatMode.Restart
@@ -26,10 +26,11 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         label = "shimmerTranslation"
     )
 
+    // Using the premium brand palette for shimmers
     val shimmerColors = listOf(
-        SurfaceDarkVariant,
+        BrandNavyDeep,
         SurfaceDarkElevated,
-        SurfaceDarkVariant,
+        BrandNavyDeep,
     )
 
     val brush = Brush.linearGradient(

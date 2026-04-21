@@ -63,6 +63,40 @@ data class VerifyPinResponse(
     val valid: Boolean
 )
 
+data class XtreamHomeRequest(
+    val url: String
+)
+
+data class XtreamCategoryRequest(
+    val url: String,
+    val categoryId: String
+)
+
+data class XtreamSearchRequest(
+    val url: String,
+    val query: String
+)
+
+data class XtreamHomeResponse(
+    val featured: List<M3UChannel> = emptyList(),
+    val categories: List<XtreamCategorySection> = emptyList(),
+    val totalCategories: Int = 0
+)
+
+data class XtreamCategorySection(
+    val categoryId: String,
+    val title: String,
+    val channels: List<M3UChannel> = emptyList()
+)
+
+data class XtreamCategoryResponse(
+    val channels: List<M3UChannel> = emptyList()
+)
+
+data class XtreamSearchResponse(
+    val results: List<M3UChannel> = emptyList()
+)
+
 // --- M3U parsed models --------------------------------------------------------
 
 @Immutable

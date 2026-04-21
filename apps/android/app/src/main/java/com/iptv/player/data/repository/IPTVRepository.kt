@@ -94,6 +94,32 @@ class IPTVRepository @Inject constructor(
         }
     }
 
+    suspend fun loadXtreamHome(url: String): Result<XtreamHomeResponse> = safeCall {
+        val response = api.getXtreamHome(XtreamHomeRequest(url))
+        if (!response.isSuccessful || response.body() == null) {
+            throw Exception(extractApiError(response, "Failed to load Xtream home"))
+        }
+        response.body()!!
+    }
+
+    suspend fun loadXtreamCategory(url: String, categoryId: String): Result<List<M3UChannel>> = safeCall {
+        val response = api.getXtreamCategory(XtreamCategoryRequest(url, categoryId))
+        if (!response.isSuccessful || response.body() == null) {
+            throw Exception(extractApiError(response, "Failed to load Xtream category"))
+        }
+        response.body()!!.channels
+    }
+
+    suspend fun searchXtreamChannels(url: String, query: String): Result<List<M3UChannel>> = safeCall {
+        val response = api.searchXtream(XtreamSearchRequest(url, query))
+        if (!response.isSuccessful || response.body() == null) {
+            throw Exception(extractApiError(response, "Failed to search Xtream channels"))
+        }
+        response.body()!!.results
+    }
+
+    fun isXtreamPlaylistUrl(url: String): Boolean = M3UParser.looksLikeXtreamUrl(url)
+
     suspend fun getCachedGroups(): List<String> = channelCacheDao.getGroups()
     suspend fun getChannelsByGroup(group: String): List<CachedChannel> = channelCacheDao.getByGroup(group)
     suspend fun searchChannels(query: String): List<CachedChannel> = channelCacheDao.search(query)

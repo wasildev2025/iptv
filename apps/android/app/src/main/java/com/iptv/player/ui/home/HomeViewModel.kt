@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.iptv.player.data.model.FavoriteChannel
 import com.iptv.player.data.model.M3UChannel
 import com.iptv.player.data.model.RecentChannel
+import com.iptv.player.data.model.XtreamHomeResponse
 import com.iptv.player.data.repository.IPTVRepository
 import com.iptv.player.util.ConnectionState
 import com.iptv.player.util.NetworkObserver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -19,8 +21,12 @@ import javax.inject.Inject
 
 @Immutable
 sealed class HomeFeedItem {
+    /**
+     * Featured carousel. Typically 3–5 channels; the first is the user's top
+     * favourite (when known), then curated seeds from the largest categories.
+     */
     @Immutable
-    data class Hero(val channel: M3UChannel) : HomeFeedItem()
+    data class Hero(val channels: List<M3UChannel>) : HomeFeedItem()
     @Immutable
     data class SectionHeader(val title: String) : HomeFeedItem()
     @Immutable
@@ -55,6 +61,9 @@ class HomeViewModel @Inject constructor(
     val feedState: StateFlow<HomeUiState> = _feedState.asStateFlow()
 
     private val _allChannels = MutableStateFlow<List<M3UChannel>>(emptyList())
+    private val _xtreamHome = MutableStateFlow<XtreamHomeResponse?>(null)
+    private val _activePlaylistUrl = MutableStateFlow("")
+    private val _isXtreamMode = MutableStateFlow(false)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -62,24 +71,13 @@ class HomeViewModel @Inject constructor(
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
 
+    private val _searchResults = MutableStateFlow<List<M3UChannel>>(emptyList())
+    val searchResults: StateFlow<List<M3UChannel>> = _searchResults.asStateFlow()
+
+    private var searchJob: Job? = null
+
     val connectionState: StateFlow<ConnectionState> = networkObserver.connectionState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ConnectionState.Available)
-
-    val searchResults: StateFlow<List<M3UChannel>> = _searchQuery
-        .debounce(300L)
-        .combine(_allChannels) { query, channels ->
-            if (query.isBlank()) {
-                emptyList()
-            } else {
-                withContext(Dispatchers.Default) {
-                    channels.filter { channel ->
-                        channel.name.contains(query, ignoreCase = true) ||
-                                channel.groupTitle.contains(query, ignoreCase = true)
-                    }
-                }
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val favorites: StateFlow<List<FavoriteChannel>> = repository.getFavorites()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -89,9 +87,10 @@ class HomeViewModel @Inject constructor(
 
     init {
         // Observe favorites and recents to rebuild feed dynamically
-        combine(recentChannels, favorites, _allChannels) { recents, favs, channels ->
-            if (channels.isNotEmpty()) {
-                buildHomeFeed(channels, recents, favs)
+        combine(recentChannels, favorites, _allChannels, _xtreamHome) { recents, favs, channels, xtreamHome ->
+            when {
+                xtreamHome != null -> buildXtreamFeed(xtreamHome, recents, favs)
+                channels.isNotEmpty() -> buildHomeFeed(channels, recents, favs)
             }
         }.launchIn(viewModelScope)
     }
@@ -101,7 +100,29 @@ class HomeViewModel @Inject constructor(
             _isLoading.value = true
             _loadingProgress.value = 0.1f
             _feedState.value = _feedState.value.copy(error = null)
-            
+            _activePlaylistUrl.value = playlistUrl
+            _searchResults.value = emptyList()
+
+            if (repository.isXtreamPlaylistUrl(playlistUrl)) {
+                _isXtreamMode.value = true
+                _allChannels.value = emptyList()
+                _xtreamHome.value = null
+                val result = repository.loadXtreamHome(playlistUrl)
+                result.onSuccess { home ->
+                    _loadingProgress.value = 0.7f
+                    _xtreamHome.value = home
+                }.onFailure { e ->
+                    _isLoading.value = false
+                    _feedState.value = _feedState.value.copy(
+                        error = e.message ?: "Failed to load Xtream catalogue"
+                    )
+                }
+                return@launch
+            }
+
+            _isXtreamMode.value = false
+            _xtreamHome.value = null
+            _allChannels.value = emptyList()
             val result = repository.loadPlaylist(playlistUrl)
             result.onSuccess { playlist ->
                 _loadingProgress.value = 0.5f
@@ -123,12 +144,26 @@ class HomeViewModel @Inject constructor(
         withContext(Dispatchers.Default) {
             val items = mutableListOf<HomeFeedItem>()
 
-            // 1. Hero Section
-            val heroChannel = favs.firstOrNull()?.let { f ->
-                channels.find { it.streamUrl == f.streamUrl }
-            } ?: channels.firstOrNull()
+            // 1. Hero carousel — up to 5 featured channels.
+            //    Order: favourites first (so users see "their" content), then
+            //    the first channel of each of the biggest groups. Deduped.
+            val heroCandidates = buildList {
+                // Favourites that actually exist in the current playlist.
+                favs.asSequence()
+                    .mapNotNull { f -> channels.find { it.streamUrl == f.streamUrl } }
+                    .forEach(::add)
+                // Top channel from each of the largest groups.
+                channels.groupBy { it.groupTitle }
+                    .entries
+                    .sortedByDescending { it.value.size }
+                    .forEach { (_, groupChannels) -> groupChannels.firstOrNull()?.let(::add) }
+            }
+                .distinctBy { it.streamUrl }
+                .take(5)
 
-            heroChannel?.let { items.add(HomeFeedItem.Hero(it)) }
+            if (heroCandidates.isNotEmpty()) {
+                items.add(HomeFeedItem.Hero(heroCandidates))
+            }
 
             // 2. Continue Watching
             if (recents.isNotEmpty()) {
@@ -158,8 +193,81 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    private suspend fun buildXtreamFeed(
+        home: XtreamHomeResponse,
+        recents: List<RecentChannel>,
+        favs: List<FavoriteChannel>
+    ) {
+        withContext(Dispatchers.Default) {
+            val items = mutableListOf<HomeFeedItem>()
+
+            val heroCandidates = buildList {
+                favs.asSequence()
+                    .mapNotNull { favorite ->
+                        home.categories.asSequence()
+                            .flatMap { it.channels.asSequence() }
+                            .firstOrNull { it.streamUrl == favorite.streamUrl }
+                    }
+                    .forEach(::add)
+                addAll(home.featured)
+            }
+                .distinctBy { it.streamUrl }
+                .take(5)
+
+            if (heroCandidates.isNotEmpty()) {
+                items.add(HomeFeedItem.Hero(heroCandidates))
+            }
+
+            if (recents.isNotEmpty()) {
+                items.add(HomeFeedItem.SectionHeader("Continue Watching"))
+                items.add(HomeFeedItem.ContinueWatchingRow(recents.take(15)))
+            }
+
+            home.categories.forEach { category ->
+                if (category.channels.isNotEmpty()) {
+                    items.add(HomeFeedItem.SectionHeader(category.title))
+                    items.add(
+                        HomeFeedItem.CategoryRow(
+                            category.title,
+                            category.channels.map { it.copy(groupTitle = category.title) }
+                        )
+                    )
+                }
+            }
+
+            _feedState.value = HomeUiState(
+                error = null,
+                feedItems = items,
+                channelCount = home.categories.sumOf { it.channels.size }
+            )
+            _isLoading.value = false
+            _loadingProgress.value = 1f
+        }
+    }
+
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(300L)
+            if (_isXtreamMode.value) {
+                repository.searchXtreamChannels(_activePlaylistUrl.value, query)
+                    .onSuccess { results -> _searchResults.value = results }
+                    .onFailure { _searchResults.value = emptyList() }
+            } else {
+                _searchResults.value = withContext(Dispatchers.Default) {
+                    _allChannels.value.filter { channel ->
+                        channel.name.contains(query, ignoreCase = true) ||
+                            channel.groupTitle.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+        }
     }
 
     fun toggleSearch() {

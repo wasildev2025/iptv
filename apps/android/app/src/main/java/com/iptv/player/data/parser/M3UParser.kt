@@ -111,9 +111,7 @@ object M3UParser {
     internal fun normalizeXtreamPlaylistUrl(rawUrl: String): String {
         if (rawUrl.isBlank()) return rawUrl
         val httpUrl = rawUrl.toHttpUrlOrNull() ?: return rawUrl
-        val looksXtream = httpUrl.encodedPath.endsWith("/get.php") &&
-            httpUrl.queryParameter("username") != null &&
-            httpUrl.queryParameter("password") != null
+        val looksXtream = looksLikeXtreamUrl(rawUrl)
         if (!looksXtream) return rawUrl
 
         val type = httpUrl.queryParameter("type")
@@ -124,5 +122,13 @@ object M3UParser {
                 .toString()
             else -> rawUrl
         }
+    }
+
+    fun looksLikeXtreamUrl(rawUrl: String): Boolean {
+        if (rawUrl.isBlank()) return false
+        val httpUrl = rawUrl.toHttpUrlOrNull() ?: return false
+        return httpUrl.encodedPath.endsWith("/get.php") &&
+            httpUrl.queryParameter("username") != null &&
+            httpUrl.queryParameter("password") != null
     }
 }

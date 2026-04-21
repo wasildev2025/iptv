@@ -30,7 +30,7 @@ fun HeroSectionSkeleton() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(340.dp) // matches HeroCarousel.HERO_HEIGHT_DP
             .background(SurfaceDarkVariant)
             .shimmerEffect()
     ) {

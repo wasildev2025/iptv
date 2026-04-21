@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -23,10 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.iptv.player.ui.components.ChannelLogo
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.iptv.player.data.model.M3UChannel
 import com.iptv.player.util.ConnectionState
 import com.iptv.player.ui.components.ChannelCard
+import com.iptv.player.ui.components.HeroCarousel
 import com.iptv.player.ui.components.SearchOverlay
 import com.iptv.player.ui.theme.BrandAccent
 import com.iptv.player.ui.theme.BrandBackground
@@ -222,7 +224,11 @@ fun HomeFeed(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
 ) {
+    // Shared list state so the hero can read scroll offset for parallax.
+    val listState = rememberLazyListState()
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
@@ -230,7 +236,7 @@ fun HomeFeed(
             items = items,
             key = { item ->
                 when (item) {
-                    is HomeFeedItem.Hero -> "hero-${item.channel.streamUrl}"
+                    is HomeFeedItem.Hero -> "hero-carousel"
                     is HomeFeedItem.SectionHeader -> "header-${item.title}"
                     is HomeFeedItem.ContinueWatchingRow -> "continue-watching"
                     is HomeFeedItem.CategoryRow -> "category-${item.title}"
@@ -240,13 +246,18 @@ fun HomeFeed(
         ) { item ->
             when (item) {
                 is HomeFeedItem.Hero -> {
-                    HeroSection(
-                        channel = item.channel,
-                        onClick = {
-                            onChannelClick(item.channel.streamUrl, item.channel.name, item.channel.groupTitle, item.channel.logoUrl)
+                    HeroCarousel(
+                        channels = item.channels,
+                        onChannelClick = { ch ->
+                            onChannelClick(ch.streamUrl, ch.name, ch.groupTitle, ch.logoUrl)
                         },
                         sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        parallaxOffsetPx = {
+                            if (listState.firstVisibleItemIndex == 0)
+                                listState.firstVisibleItemScrollOffset.toFloat()
+                            else 0f
+                        }
                     )
                 }
                 is HomeFeedItem.SectionHeader -> {
@@ -259,203 +270,112 @@ fun HomeFeed(
                     )
                 }
                 is HomeFeedItem.ContinueWatchingRow -> {
-                    ContinueWatchingRow(
-                        channels = item.channels,
-                        favoriteUrls = favoriteUrls,
-                        onChannelClick = onChannelClick
-                    )
+                    HorizontalRailContainer {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(item.channels, key = { it.streamUrl }) { recent ->
+                                ChannelCard(
+                                    name = recent.name,
+                                    groupTitle = recent.groupTitle,
+                                    logoUrl = recent.logoUrl,
+                                    isFavorite = favoriteUrls.contains(recent.streamUrl),
+                                    onClick = { onChannelClick(recent.streamUrl, recent.name, recent.groupTitle, recent.logoUrl) },
+                                    modifier = Modifier.width(200.dp)
+                                )
+                            }
+                        }
+                    }
                 }
                 is HomeFeedItem.CategoryRow -> {
-                    CategoryRow(
-                        title = item.title,
-                        channels = item.channels,
-                        favoriteUrls = favoriteUrls,
-                        onChannelClick = onChannelClick,
-                        onFavoriteClick = onFavoriteClick,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
+                    HorizontalRailContainer {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(item.channels, key = { it.streamUrl }) { channel ->
+                                with(sharedTransitionScope) {
+                                    ChannelCard(
+                                        name = channel.name,
+                                        groupTitle = channel.groupTitle,
+                                        logoUrl = channel.logoUrl,
+                                        isFavorite = favoriteUrls.contains(channel.streamUrl),
+                                        onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
+                                        onFavoriteClick = { onFavoriteClick(channel) },
+                                        modifier = Modifier
+                                            .width(160.dp)
+                                            .sharedElement(
+                                                rememberSharedContentState(key = "logo-${channel.streamUrl}"),
+                                                animatedVisibilityScope = animatedVisibilityScope
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
                 is HomeFeedItem.ChannelGrid -> {
-                    ChannelGridRow(
-                        channels = item.channels,
-                        favoriteUrls = favoriteUrls,
-                        onChannelClick = onChannelClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
+                    HorizontalRailContainer {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(item.channels.take(20), key = { it.streamUrl }) { channel ->
+                                ChannelCard(
+                                    name = channel.name,
+                                    groupTitle = channel.groupTitle,
+                                    logoUrl = channel.logoUrl,
+                                    isFavorite = favoriteUrls.contains(channel.streamUrl),
+                                    onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
+                                    onFavoriteClick = { onFavoriteClick(channel) },
+                                    modifier = Modifier.width(140.dp),
+                                    aspectRatio = 1f
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * Adds a cinematic horizontal edge-fade to its content. This makes partially
+ * visible cards in a horizontal rail look like they're "emerging from the shadows"
+ * rather than being abruptly cropped at the screen edge.
+ */
 @Composable
-fun ContinueWatchingRow(
-    channels: List<com.iptv.player.data.model.RecentChannel>,
-    favoriteUrls: Set<String>,
-    onChannelClick: (String, String, String, String) -> Unit
-) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(channels, key = { it.streamUrl }) { recent ->
-            ChannelCard(
-                name = recent.name,
-                groupTitle = recent.groupTitle,
-                logoUrl = recent.logoUrl,
-                isFavorite = favoriteUrls.contains(recent.streamUrl),
-                onClick = { onChannelClick(recent.streamUrl, recent.name, recent.groupTitle, recent.logoUrl) },
-                modifier = Modifier.width(200.dp)
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-fun CategoryRow(
-    title: String,
-    channels: List<M3UChannel>,
-    favoriteUrls: Set<String>,
-    onChannelClick: (String, String, String, String) -> Unit,
-    onFavoriteClick: (M3UChannel) -> Unit,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope
-) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(channels, key = { it.streamUrl }) { channel ->
-            with(sharedTransitionScope) {
-                ChannelCard(
-                    name = channel.name,
-                    groupTitle = channel.groupTitle,
-                    logoUrl = channel.logoUrl,
-                    isFavorite = favoriteUrls.contains(channel.streamUrl),
-                    onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
-                    onFavoriteClick = { onFavoriteClick(channel) },
-                    modifier = Modifier
-                        .width(160.dp)
-                        .sharedElement(
-                            rememberSharedContentState(key = "logo-${channel.streamUrl}"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ChannelGridRow(
-    channels: List<M3UChannel>,
-    favoriteUrls: Set<String>,
-    onChannelClick: (String, String, String, String) -> Unit,
-    onFavoriteClick: (M3UChannel) -> Unit
-) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(channels.take(20), key = { it.streamUrl }) { channel ->
-            ChannelCard(
-                name = channel.name,
-                groupTitle = channel.groupTitle,
-                logoUrl = channel.logoUrl,
-                isFavorite = favoriteUrls.contains(channel.streamUrl),
-                onClick = { onChannelClick(channel.streamUrl, channel.name, channel.groupTitle, channel.logoUrl) },
-                onFavoriteClick = { onFavoriteClick(channel) },
-                modifier = Modifier.width(140.dp),
-                aspectRatio = 1f
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-fun HeroSection(
-    channel: M3UChannel,
-    onClick: () -> Unit,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope
+private fun HorizontalRailContainer(
+    content: @Composable () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
-            .background(BrandNavyDeep)
-    ) {
-        with(sharedTransitionScope) {
-            ChannelLogo(
-                logoUrl = channel.logoUrl,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .sharedElement(
-                        rememberSharedContentState(key = "logo-${channel.streamUrl}"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    ),
-                contentScale = ContentScale.Crop,
-                alpha = 0.6f
-            )
-        }
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, BrandBackground),
-                        startY = 300f
+            .drawWithContent {
+                drawContent()
+                // Left edge fade
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        0.0f to BrandBackground,
+                        0.05f to Color.Transparent,
+                        startX = 0f,
+                        endX = 100f
                     )
                 )
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(24.dp)
-        ) {
-            Surface(
-                color = BrandAccent,
-                shape = RoundedCornerShape(4.dp)
-            ) {
-                Text(
-                    text = "FEATURED",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = BrandBackground
+                // Right edge fade
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        0.95f to Color.Transparent,
+                        1.0f to BrandBackground,
+                        startX = size.width - 100f,
+                        endX = size.width
+                    )
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = channel.name,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = BrandTextPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = channel.groupTitle,
-                style = MaterialTheme.typography.bodyLarge,
-                color = BrandTextSecondary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Watch Now", fontWeight = FontWeight.Bold)
-            }
-        }
+    ) {
+        content()
     }
 }
 
