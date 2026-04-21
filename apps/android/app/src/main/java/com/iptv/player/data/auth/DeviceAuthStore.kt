@@ -80,6 +80,12 @@ class DeviceAuthStore @Inject constructor(
     suspend fun currentPlaylistId(): String? =
         context.activationDataStore.data.map { it[AuthKeys.PLAYLIST_ID] }.first()
 
+    suspend fun currentPlaylistUrl(): String? =
+        context.activationDataStore.data.map { it[AuthKeys.PLAYLIST_URL] }.first()
+
+    suspend fun currentPlaylistXmlUrl(): String? =
+        context.activationDataStore.data.map { it[AuthKeys.PLAYLIST_XML_URL] }.first()
+
     /** Replace only the selected playlist fields, leaving device/app state untouched. */
     suspend fun updateSelectedPlaylist(
         playlistId: String,

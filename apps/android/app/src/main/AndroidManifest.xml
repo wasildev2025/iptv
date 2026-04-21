@@ -12,6 +12,7 @@
     <application
         android:name=".IPTVApp"
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:label="IPTV Player"
         android:supportsRtl="true"

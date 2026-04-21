@@ -9,6 +9,8 @@ import com.iptv.player.data.model.VerifyPinRequest
 import com.iptv.player.data.model.VerifyPinResponse
 import com.iptv.player.data.model.XtreamCategoryRequest
 import com.iptv.player.data.model.XtreamCategoryResponse
+import com.iptv.player.data.model.XtreamEpgChannelsRequest
+import com.iptv.player.data.model.XtreamEpgChannelsResponse
 import com.iptv.player.data.model.XtreamHomeRequest
 import com.iptv.player.data.model.XtreamHomeResponse
 import com.iptv.player.data.model.XtreamSearchRequest
@@ -61,4 +63,10 @@ interface IPTVApiService {
     suspend fun searchXtream(
         @Body request: XtreamSearchRequest
     ): Response<XtreamSearchResponse>
+
+    /** Load Xtream live channels that have EPG ids. */
+    @POST("public/xtream/epg-channels")
+    suspend fun getXtreamEpgChannels(
+        @Body request: XtreamEpgChannelsRequest
+    ): Response<XtreamEpgChannelsResponse>
 }

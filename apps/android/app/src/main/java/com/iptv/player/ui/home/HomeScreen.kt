@@ -43,6 +43,7 @@ fun HomeScreen(
     onChannelClick: (String, String, String, String) -> Unit,
     onSettingsClick: () -> Unit,
     onEpgClick: () -> Unit,
+    onFavoritesClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: HomeViewModel = hiltViewModel()
@@ -77,7 +78,10 @@ fun HomeScreen(
                 )
             },
             bottomBar = {
-                HomeBottomBar(onEpgClick = onEpgClick)
+                HomeBottomBar(
+                    onEpgClick = onEpgClick,
+                    onFavoritesClick = onFavoritesClick
+                )
             },
             containerColor = BrandBackground
         ) { paddingValues ->
@@ -173,7 +177,10 @@ fun HomeTopBar(
 }
 
 @Composable
-fun HomeBottomBar(onEpgClick: () -> Unit) {
+fun HomeBottomBar(
+    onEpgClick: () -> Unit,
+    onFavoritesClick: () -> Unit
+) {
     NavigationBar(
         containerColor = BrandNavyDeep.copy(alpha = 0.95f),
         tonalElevation = 0.dp
@@ -203,7 +210,7 @@ fun HomeBottomBar(onEpgClick: () -> Unit) {
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigate to Favorites */ },
+            onClick = onFavoritesClick,
             icon = { Icon(Icons.Default.Favorite, null) },
             label = { Text("My List") },
             colors = NavigationBarItemDefaults.colors(

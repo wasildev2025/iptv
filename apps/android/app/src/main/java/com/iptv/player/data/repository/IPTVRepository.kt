@@ -8,11 +8,19 @@ import com.iptv.player.data.db.FavoriteDao
 import com.iptv.player.data.db.RecentDao
 import com.iptv.player.data.model.*
 import com.iptv.player.data.parser.M3UParser
+import com.iptv.player.data.parser.XmltvParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONObject
 import retrofit2.Response
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.net.URL
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -118,7 +126,72 @@ class IPTVRepository @Inject constructor(
         response.body()!!.results
     }
 
+    suspend fun loadXtreamEpgChannels(url: String): Result<List<M3UChannel>> = safeCall {
+        val response = api.getXtreamEpgChannels(XtreamEpgChannelsRequest(url))
+        if (!response.isSuccessful || response.body() == null) {
+            throw Exception(extractApiError(response, "Failed to load Xtream guide channels"))
+        }
+        response.body()!!.channels
+    }
+
     fun isXtreamPlaylistUrl(url: String): Boolean = M3UParser.looksLikeXtreamUrl(url)
+
+    suspend fun syncCurrentPlaylistEpg(): Result<Int> = withContext(Dispatchers.IO) {
+        safeCall {
+            val playlistUrl = authStore.currentPlaylistUrl().orEmpty()
+            if (playlistUrl.isBlank()) {
+                throw Exception("No active playlist URL found")
+            }
+
+            val xmlUrl = authStore.currentPlaylistXmlUrl()
+                ?.takeIf { it.isNotBlank() }
+                ?: deriveXtreamXmltvUrl(playlistUrl)
+                ?: throw Exception("No EPG feed configured for this playlist")
+
+            if (isXtreamPlaylistUrl(playlistUrl)) {
+                loadXtreamEpgChannels(playlistUrl).getOrThrow().let { channels ->
+                    replaceChannelCache(channels)
+                }
+            }
+
+            val now = System.currentTimeMillis()
+            val windowStart = now - SIX_HOURS_MS
+            val windowEnd = now + THIRTY_SIX_HOURS_MS
+
+            epgDao.clearAll()
+            epgDao.deleteOldPrograms(now)
+
+            val client = OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(90, TimeUnit.SECONDS)
+                .build()
+
+            val request = Request.Builder().url(xmlUrl).build()
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                throw Exception("Failed to download EPG: ${response.code}")
+            }
+
+            var inserted = 0
+            response.body?.byteStream()?.use { rawStream ->
+                val stream = if (
+                    xmlUrl.endsWith(".gz", ignoreCase = true) ||
+                    response.header("Content-Encoding").equals("gzip", ignoreCase = true)
+                ) {
+                    GZIPInputStream(rawStream)
+                } else {
+                    rawStream
+                }
+
+                XmltvParser.parsePrograms(stream, windowStart, windowEnd) { batch ->
+                    epgDao.insertAll(batch)
+                    inserted += batch.size
+                }
+            } ?: throw Exception("Empty EPG response")
+
+            inserted
+        }
+    }
 
     suspend fun getCachedGroups(): List<String> = channelCacheDao.getGroups()
     suspend fun getChannelsByGroup(group: String): List<CachedChannel> = channelCacheDao.getByGroup(group)
@@ -139,6 +212,43 @@ class IPTVRepository @Inject constructor(
          * statement cache — 500 rows/batch keeps every write under ~200 KB.
          */
         const val CACHE_INSERT_CHUNK = 500
+        const val SIX_HOURS_MS = 6 * 60 * 60 * 1000L
+        const val THIRTY_SIX_HOURS_MS = 36 * 60 * 60 * 1000L
+    }
+
+    private suspend fun replaceChannelCache(channels: List<M3UChannel>) {
+        val cached = channels.map { ch ->
+            CachedChannel(
+                streamUrl = ch.streamUrl,
+                name = ch.name,
+                groupTitle = ch.groupTitle,
+                logoUrl = ch.logoUrl,
+                tvgId = ch.tvgId,
+                isLive = ch.isLive
+            )
+        }
+        channelCacheDao.clearAll()
+        cached.chunked(CACHE_INSERT_CHUNK).forEach { batch ->
+            channelCacheDao.insertAll(batch)
+        }
+    }
+
+    private fun deriveXtreamXmltvUrl(playlistUrl: String): String? {
+        if (!M3UParser.looksLikeXtreamUrl(playlistUrl)) return null
+        return runCatching {
+            val parsed = URL(playlistUrl)
+            val query = parsed.query.orEmpty()
+            val params = query.split("&")
+                .mapNotNull { item ->
+                    val parts = item.split("=", limit = 2)
+                    if (parts.size == 2) parts[0] to parts[1] else null
+                }
+                .toMap()
+            val username = URLDecoder.decode(params["username"] ?: return null, "UTF-8")
+            val password = URLDecoder.decode(params["password"] ?: return null, "UTF-8")
+            val portPart = if (parsed.port != -1 && parsed.port != parsed.defaultPort) ":${parsed.port}" else ""
+            "${parsed.protocol}://${parsed.host}$portPart/xmltv.php?username=${URLEncoder.encode(username, "UTF-8")}&password=${URLEncoder.encode(password, "UTF-8")}"
+        }.getOrNull()
     }
 
     // --- EPG ---
@@ -178,7 +288,7 @@ class IPTVRepository @Inject constructor(
 
     // --- Helpers ---
 
-    private inline fun <T> safeCall(block: () -> T): Result<T> = try {
+    private suspend inline fun <T> safeCall(crossinline block: suspend () -> T): Result<T> = try {
         Result.success(block())
     } catch (e: Exception) {
         Result.failure(e)

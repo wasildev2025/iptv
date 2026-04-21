@@ -362,6 +362,22 @@ export class PublicController {
     return { results: await this.xtream.search(url, query) };
   }
 
+  @Post('xtream/epg-channels')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @UseGuards(DeviceTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Return Xtream live channels that include EPG ids so the Android guide can cache only the guide-eligible subset.',
+  })
+  async xtreamEpgChannels(@Body() body: { url?: string }) {
+    const url = body?.url?.trim();
+    if (!url) {
+      throw new BadRequestException('url is required');
+    }
+    return { channels: await this.xtream.loadEpgChannels(url) };
+  }
+
   // ---------------------------------------------------------------------------
   // Free IPTV Status Checker — unchanged from previous pass.
   // ---------------------------------------------------------------------------

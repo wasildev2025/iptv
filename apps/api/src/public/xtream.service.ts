@@ -146,6 +146,25 @@ export class XtreamService {
       .slice(0, SEARCH_RESULT_LIMIT);
   }
 
+  async loadEpgChannels(rawUrl: string): Promise<XtreamChannelDto[]> {
+    const creds = this.parseCredentials(rawUrl);
+    const categoryMap = await this.fetchCategoryMap(creds);
+    const streams = await this.fetchJson<XtreamStream[]>(
+      `${creds.apiBase}&action=get_live_streams`,
+    );
+
+    return streams
+      .filter((stream) => String(stream.epg_channel_id ?? '').trim().length > 0)
+      .map((stream) =>
+        this.toChannelDto(
+          stream,
+          creds,
+          categoryMap.get(String(stream.category_id ?? '').trim()) ?? null,
+        ),
+      )
+      .filter((channel): channel is XtreamChannelDto => channel !== null);
+  }
+
   private parseCredentials(rawUrl: string): XtreamCredentials {
     const creds = this.tryParseCredentials(rawUrl);
     if (!creds) {

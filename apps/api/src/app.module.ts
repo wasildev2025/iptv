@@ -25,6 +25,7 @@ import { ParentChangeModule } from './parent-change/parent-change.module';
 import { ActivationCodesModule } from './activation-codes/activation-codes.module';
 import { CreditPasscodeModule } from './credit-passcode/credit-passcode.module';
 import { PublicModule } from './public/public.module';
+import { MetadataModule } from './metadata/metadata.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
 @Module({
@@ -60,6 +61,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
     ActivationCodesModule,
     CreditPasscodeModule,
     PublicModule,
+    MetadataModule,
   ],
   providers: [
     {

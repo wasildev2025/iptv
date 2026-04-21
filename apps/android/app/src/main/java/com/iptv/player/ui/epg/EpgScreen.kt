@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.iptv.player.ui.components.ChannelLogo
 import com.iptv.player.data.model.CachedChannel
 import com.iptv.player.data.model.EpgProgram
@@ -40,6 +43,7 @@ private val ROW_HEIGHT = 80.dp
 @Composable
 fun EpgScreen(
     onChannelClick: (String, String, String, String) -> Unit,
+    onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: EpgViewModel = hiltViewModel()
@@ -47,11 +51,14 @@ fun EpgScreen(
     val uiState by viewModel.uiState.collectAsState()
     val horizontalScrollState = rememberScrollState()
     var selectedProgram by remember { mutableStateOf<EpgProgram?>(null) }
-    
+    val hasGuideData = uiState.channels.isNotEmpty() && uiState.programs.isNotEmpty()
+
+    BackHandler(onBack = onBack)
+
     Box(modifier = Modifier.fillMaxSize().background(BrandBackground)) {
         Column {
             // EPG Header with Date
-            EpgHeader()
+            EpgHeader(onBack = onBack)
 
             // Focused Program Info Section (Premium Feature)
             ProgramDetailHeader(selectedProgram)
@@ -67,6 +74,18 @@ fun EpgScreen(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = BrandAccent)
                 }
+            } else if (uiState.error != null) {
+                EpgMessageState(
+                    title = "Guide unavailable",
+                    message = uiState.error ?: "Failed to load guide data.",
+                    onBack = onBack
+                )
+            } else if (!hasGuideData) {
+                EpgMessageState(
+                    title = "No guide data yet",
+                    message = "This playlist does not have program data loaded yet. Live channels can still play normally, but the TV Guide needs EPG data before it can show schedules.",
+                    onBack = onBack
+                )
             } else {
                 EpgGrid(
                     channels = uiState.channels,
@@ -80,12 +99,14 @@ fun EpgScreen(
                 )
             }
         }
-        
-        // Current Time Indicator (Red line)
-        CurrentTimeIndicator(
-            startTime = uiState.startTimeMillis,
-            scrollState = horizontalScrollState
-        )
+
+        if (hasGuideData) {
+            // Current Time Indicator (Red line)
+            CurrentTimeIndicator(
+                startTime = uiState.startTimeMillis,
+                scrollState = horizontalScrollState
+            )
+        }
     }
 }
 
@@ -143,7 +164,7 @@ fun ProgramDetailHeader(program: EpgProgram?) {
 }
 
 @Composable
-fun EpgHeader() {
+fun EpgHeader(onBack: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()) }
     Row(
         modifier = Modifier
@@ -151,6 +172,14 @@ fun EpgHeader() {
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = "TV GUIDE",
             style = MaterialTheme.typography.titleLarge,
@@ -165,6 +194,44 @@ fun EpgHeader() {
             color = BrandTextSecondary,
             letterSpacing = 1.sp
         )
+    }
+}
+
+@Composable
+private fun EpgMessageState(
+    title: String,
+    message: String,
+    onBack: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = BrandTextSecondary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = onBack) {
+                Text("Back to Home")
+            }
+        }
     }
 }
 

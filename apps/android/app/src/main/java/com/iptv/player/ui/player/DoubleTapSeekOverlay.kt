@@ -82,10 +82,10 @@ fun DoubleTapSeekOverlay(
                     onDoubleTap = { offset ->
                         val isLeft = offset.x < size.width / 2f
                         if (isLeft) {
-                            player.seekBack(SEEK_STEP_MS)
+                            player.seekBack()
                             backwardBadgeVisible = true
                         } else {
-                            player.seekForward(SEEK_STEP_MS)
+                            player.seekForward()
                             forwardBadgeVisible = true
                         }
                         scope.launch {

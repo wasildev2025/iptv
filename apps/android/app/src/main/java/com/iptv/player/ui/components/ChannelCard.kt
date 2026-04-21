@@ -25,16 +25,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import coil.compose.AsyncImage
-import coil.request.CachePolicy
-import coil.request.ImageRequest
-import coil.size.Precision
 import com.iptv.player.ui.theme.BrandAccent
 import com.iptv.player.ui.theme.BrandNavyDeep
 
@@ -95,33 +90,13 @@ fun ChannelCard(
         color = BrandNavyDeep
     ) {
         Box(modifier = Modifier.aspectRatio(aspectRatio)) {
-            // High-quality Image loading with size optimization.
-            // When logoUrl is blank (e.g. Xtream `type=m3u` exports omit tvg-logo)
-            // ChannelLogo renders a neutral placeholder instead of firing a
-            // null request into Coil.
-            if (logoUrl.isNotBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(logoUrl)
-                        .crossfade(true)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .memoryCachePolicy(CachePolicy.ENABLED)
-                        .size(400, 225) // Downsample to card size
-                        .precision(Precision.EXACT)
-                        .build(),
-                    contentDescription = name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    alpha = if (isFocused) 1f else 0.85f
-                )
-            } else {
-                ChannelLogo(
-                    logoUrl = null,
-                    contentDescription = name,
-                    modifier = Modifier.fillMaxSize(),
-                    alpha = if (isFocused) 1f else 0.85f
-                )
-            }
+            ChannelLogo(
+                logoUrl = logoUrl,
+                contentDescription = name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                alpha = if (isFocused) 1f else 0.85f
+            )
 
             // Cinematic Gradient Overlay (Darker at bottom)
             Box(

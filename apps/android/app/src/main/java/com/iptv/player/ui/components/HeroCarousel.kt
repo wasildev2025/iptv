@@ -5,6 +5,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -67,7 +68,7 @@ private const val PAGE_CHANGE_ANIM_MS = 900
  * parent scroll offset so the hero "lingers" as the feed scrolls up.
  *
  * - Auto-advance every 7s (pauses 7s after any user interaction).
- * - Scale 1.00 → 1.10 and slight X/Y pan over 12s, reversing — classic
+ * - Scale 1.00 → 1.10 and slight X pan over 12s, reversing — classic
  *   "still image that feels alive" pattern.
  * - Page indicator dots pinned to the lower-right, above the CTA row.
  *
@@ -159,27 +160,44 @@ private fun HeroPage(
     animatedVisibilityScope: AnimatedVisibilityScope,
     parallaxOffsetPx: () -> Float
 ) {
-    // Ken Burns: infinite transition that slowly zooms + pans the backdrop.
-    // We animate even when the page isn't visible — it's cheap (one float) and
-    // avoids a visible "jump" when the page becomes active.
-    val kenBurns = rememberInfiniteTransition(label = "ken-burns-$isActive")
-    val scale by kenBurns.animateFloat(
-        initialValue = 1.00f,
-        targetValue = 1.10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(KEN_BURNS_DURATION_MS, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
+    // Only the visible page keeps an infinite animation alive. Inactive pages
+    // settle back to rest instead of continuing to produce animated buffers.
+    val activeTransition = if (isActive) rememberInfiniteTransition(label = "ken-burns") else null
+    val targetScale = if (activeTransition != null) {
+        activeTransition.animateFloat(
+            initialValue = 1.00f,
+            targetValue = 1.10f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(KEN_BURNS_DURATION_MS, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        ).value
+    } else {
+        1f
+    }
+    val targetPanX = if (activeTransition != null) {
+        activeTransition.animateFloat(
+            initialValue = -18f,
+            targetValue = 18f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(KEN_BURNS_DURATION_MS, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "panX"
+        ).value
+    } else {
+        0f
+    }
+    val scale by animateFloatAsState(
+        targetValue = targetScale,
+        animationSpec = tween(durationMillis = 250),
+        label = "heroScale"
     )
-    val panX by kenBurns.animateFloat(
-        initialValue = -18f,
-        targetValue = 18f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(KEN_BURNS_DURATION_MS, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "panX"
+    val panX by animateFloatAsState(
+        targetValue = targetPanX,
+        animationSpec = tween(durationMillis = 250),
+        label = "heroPanX"
     )
 
     Box(
@@ -188,32 +206,20 @@ private fun HeroPage(
             .background(BrandNavyDeep)
             .clickable(onClick = onClick)
     ) {
-        with(sharedTransitionScope) {
-            ChannelLogo(
-                logoUrl = channel.logoUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alpha = 0.70f,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        // Parallax: the image lingers as parent scrolls up.
-                        translationY = parallaxOffsetPx() * 0.5f
-                        // Ken Burns (only while the page is the active one —
-                        // keeps inactive pages calm so the active one reads as
-                        // the focal point).
-                        if (isActive) {
-                            scaleX = scale
-                            scaleY = scale
-                            translationX = panX
-                        }
-                    }
-                    .sharedElement(
-                        rememberSharedContentState(key = "logo-${channel.streamUrl}"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-            )
-        }
+        ChannelLogo(
+            logoUrl = channel.logoUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alpha = 0.70f,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = parallaxOffsetPx() * 0.5f
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = panX
+                }
+        )
 
         // Left-to-right dark gradient to ensure text always reads cleanly,
         // regardless of the underlying backdrop image.

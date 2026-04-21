@@ -49,6 +49,10 @@ class EpgViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
+                repository.syncCurrentPlaylistEpg().onFailure {
+                    // Fall back to whatever was already cached locally.
+                }
+
                 // Only channels with a tvg-id are eligible for EPG display —
                 // this strips thousands of VOD rows that would never resolve
                 // to a program, and keeps the SQLite CursorWindow under its

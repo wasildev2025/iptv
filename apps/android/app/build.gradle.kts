@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
+    id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
     id("org.jetbrains.kotlin.plugin.compose") version "2.0.21"
 }
@@ -43,9 +44,10 @@ android {
 
 kapt {
     correctErrorTypes = true
-    arguments {
-        arg("room.generateKotlin", "true")
-    }
+}
+
+ksp {
+    arg("room.generateKotlin", "true")
 }
 
 dependencies {
@@ -86,9 +88,9 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // Room DB
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.room:room-runtime:2.7.0-alpha11")
+    implementation("androidx.room:room-ktx:2.7.0-alpha11")
+    ksp("androidx.room:room-compiler:2.7.0-alpha11")
 
     // Hilt DI
     implementation("com.google.dagger:hilt-android:2.52")

@@ -97,6 +97,14 @@ data class XtreamSearchResponse(
     val results: List<M3UChannel> = emptyList()
 )
 
+data class XtreamEpgChannelsRequest(
+    val url: String
+)
+
+data class XtreamEpgChannelsResponse(
+    val channels: List<M3UChannel> = emptyList()
+)
+
 // --- M3U parsed models --------------------------------------------------------
 
 @Immutable

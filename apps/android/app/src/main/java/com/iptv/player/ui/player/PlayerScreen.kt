@@ -6,7 +6,6 @@ import android.view.KeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
-import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,8 +35,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -47,96 +50,134 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.PlayerView
-import com.iptv.player.ui.components.ChannelLogo
-import com.iptv.player.data.model.EpgProgram
 import com.iptv.player.ui.theme.BrandAccent
+import com.iptv.player.ui.theme.BrandNavyDeep
+import com.iptv.player.ui.theme.BrandTextPrimary
+import com.iptv.player.ui.theme.BrandTextSecondary
 import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
-import java.text.SimpleDateFormat
-import java.util.*
-import java.util.concurrent.TimeUnit
 
-@OptIn(UnstableApi::class)
-@ExperimentalSharedTransitionApi
+@OptIn(UnstableApi::class, ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun PlayerScreen(
+    streamUrl: String,
+    channelName: String,
+    groupTitle: String,
+    logoUrl: String,
     onBack: () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val activity = context as? Activity
     val uiState by viewModel.uiState.collectAsState()
-
-    var isPlaying by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
-    var isBuffering by remember { mutableStateOf(true) }
     var showSettingsSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(showControls, uiState.isMiniEpgVisible, showSettingsSheet) {
-        // Keep controls visible while Mini EPG or Settings sheet is open so
-        // the user doesn't have to tap to get them back after closing either.
-        if (showControls && !uiState.isMiniEpgVisible && !showSettingsSheet) {
-            delay(5000)
-            showControls = false
-        }
-    }
-
-    DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
-    BackHandler { 
-        if (uiState.isMiniEpgVisible) viewModel.toggleMiniEpg() else onBack() 
-    }
+    var isPlaying by remember { mutableStateOf(false) }
 
     val exoPlayer = remember {
         val okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
             .build()
-        
+            
         val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(
             context,
             OkHttpDataSource.Factory(okHttpClient)
                 .setUserAgent(Util.getUserAgent(context, "IPTVPlayer"))
         )
 
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setTsExtractorFlags(
+                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or 
+                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
+            )
+            .setConstantBitrateSeekingEnabled(true)
+        
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(context, extractorsFactory)
+                    .setDataSourceFactory(dataSourceFactory)
+            )
             .build()
+            .apply {
+                playWhenReady = true
+                addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(playing: Boolean) {
+                        isPlaying = playing
+                    }
+                    
+                    override fun onPlayerError(error: PlaybackException) {
+                        // Error handling could be added here
+                    }
+                })
+            }
     }
 
-    LaunchedEffect(uiState.currentChannel?.streamUrl) {
-        val url = uiState.currentChannel?.streamUrl ?: return@LaunchedEffect
-        isBuffering = true
-        exoPlayer.stop()
-        exoPlayer.setMediaItem(MediaItem.fromUri(url))
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
-        showControls = true
-    }
-
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                isBuffering = state == Player.STATE_BUFFERING
-            }
-            override fun onIsPlayingChanged(playing: Boolean) {
-                isPlaying = playing
-            }
-            override fun onPlayerError(error: PlaybackException) {
-                viewModel.onPlayerError("Stream Error: ${error.errorCodeName}")
-            }
+    DisposableEffect(streamUrl) {
+        val mimeType = when {
+            streamUrl.contains("m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
+            streamUrl.contains("mpd", ignoreCase = true) -> MimeTypes.APPLICATION_MPD
+            streamUrl.contains("ism", ignoreCase = true) -> MimeTypes.APPLICATION_SS
+            streamUrl.contains("output=m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
+            else -> null
         }
-        exoPlayer.addListener(listener)
+
+        val mediaItem = MediaItem.Builder()
+            .setUri(streamUrl)
+            .apply {
+                if (mimeType != null) {
+                    setMimeType(mimeType)
+                }
+            }
+            .build()
+
+        exoPlayer.setMediaItem(mediaItem)
+        exoPlayer.prepare()
+
         onDispose {
-            exoPlayer.removeListener(listener)
             exoPlayer.release()
+        }
+    }
+
+    // Auto-hide controls
+    LaunchedEffect(showControls, isPlaying) {
+        if (showControls && isPlaying) {
+            delay(5000)
+            showControls = false
+        }
+    }
+
+    // Lock to landscape
+    DisposableEffect(Unit) {
+        val activity = context as? Activity
+        val originalOrientation = activity?.requestedOrientation
+        val window = activity?.window
+        val insetsController = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        if (window != null && insetsController != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose {
+            if (window != null && insetsController != null) {
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+                WindowCompat.setDecorFitsSystemWindows(window, true)
+            }
+            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    BackHandler {
+        if (uiState.isMiniEpgVisible) {
+            viewModel.toggleMiniEpg()
+        } else {
+            onBack()
         }
     }
 
@@ -146,12 +187,26 @@ fun PlayerScreen(
             .background(Color.Black)
             .onKeyEvent { keyEvent ->
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    showControls = true
                     when (keyEvent.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_UP -> { viewModel.zapPrevious(); true }
-                        KeyEvent.KEYCODE_DPAD_DOWN -> { viewModel.zapNext(); true }
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showControls = true; true }
-                        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            if (showControls) viewModel.toggleMiniEpg()
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                            if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            viewModel.toggleMiniEpg()
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            showSettingsSheet = true
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            viewModel.zapPrevious()
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            viewModel.zapNext()
                             true
                         }
                         else -> false
@@ -173,18 +228,10 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Gesture overlay — single-tap toggles controls, double-tap seeks ±10s
-        // with a ripple ring. Sits above PlayerView, below the controls, so
-        // taps on icon buttons reach them first and only empty areas fall
-        // through to this overlay.
         DoubleTapSeekOverlay(
             player = exoPlayer,
             onSingleTap = { showControls = !showControls }
         )
-
-        if (isBuffering) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(56.dp), color = BrandAccent)
-        }
 
         AnimatedVisibility(
             visible = showControls,
@@ -222,17 +269,12 @@ fun PlayerScreen(
         ) {
             MiniEpgOverlay(programs = uiState.currentPrograms)
         }
-
-        uiState.playerError?.let { error ->
-            ErrorOverlay(error = error, onRetry = { viewModel.clearError(); exoPlayer.prepare() }, onBack = onBack)
-        }
     }
 }
 
-@OptIn(UnstableApi::class)
-@ExperimentalSharedTransitionApi
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun PlayerControlsOverlay(
+private fun PlayerControlsOverlay(
     player: Player,
     uiState: PlayerUiState,
     isPlaying: Boolean,
@@ -251,205 +293,144 @@ fun PlayerControlsOverlay(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color.Black.copy(alpha = 0.6f), Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                    listOf(
+                        Color.Black.copy(alpha = 0.6f),
+                        Color.Transparent,
+                        Color.Black.copy(alpha = 0.6f)
+                    )
                 )
             )
+            .padding(24.dp)
     ) {
+        // Top Bar
         Row(
-            modifier = Modifier.fillMaxWidth().padding(24.dp).align(Alignment.TopStart),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.1f))) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            with(sharedTransitionScope) {
-                ChannelLogo(
-                    logoUrl = uiState.currentChannel?.logoUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .sharedElement(
-                            rememberSharedContentState(key = "logo-${uiState.currentChannel?.streamUrl}"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        ),
-                    contentScale = ContentScale.Fit
-                )
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
             
             Spacer(modifier = Modifier.width(16.dp))
-            Column {
+            
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = uiState.currentChannel?.name ?: "Unknown",
+                    text = uiState.currentChannel?.name ?: "",
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = uiState.currentChannel?.groupTitle ?: "",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = BrandAccent
+                    color = Color.White.copy(alpha = 0.7f)
                 )
             }
-            Spacer(modifier = Modifier.weight(1f))
+
             IconButton(onClick = onFavoriteToggle) {
                 Icon(
-                    imageVector = if (uiState.isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = "Favourite",
+                    if (uiState.isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = "Favorite",
                     tint = if (uiState.isFavorite) BrandAccent else Color.White
                 )
             }
-            Spacer(Modifier.width(4.dp))
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.1f))
-            ) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+            
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Default.Settings, "Settings", tint = Color.White)
             }
         }
 
+        // Center Controls
         Row(
             modifier = Modifier.align(Alignment.Center),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(48.dp)
+            horizontalArrangement = Arrangement.spacedBy(32.dp)
         ) {
-            IconButton(onClick = onZapPrev, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Default.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(40.dp))
-            }
             IconButton(
-                onClick = onPlayPause,
-                modifier = Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f))
+                onClick = onZapPrev,
+                modifier = Modifier.size(48.dp)
             ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(48.dp)
-                )
+                Icon(Icons.Default.SkipPrevious, "Previous", tint = Color.White, modifier = Modifier.size(32.dp))
             }
-            IconButton(onClick = onZapNext, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Default.SkipNext, null, tint = Color.White, modifier = Modifier.size(40.dp))
+
+            Surface(
+                onClick = onPlayPause,
+                shape = CircleShape,
+                color = BrandAccent,
+                modifier = Modifier.size(72.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = BrandNavyDeep,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = onZapNext,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(Icons.Default.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(32.dp))
             }
         }
 
+        // Bottom Info
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 18.dp)
-                .align(Alignment.BottomStart)
+                .align(Alignment.BottomCenter)
         ) {
             Row(
-                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    if (!isSeekable(player)) {
-                        Text(
-                            text = "LIVE",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier
-                                .background(BrandAccent, RoundedCornerShape(2.dp))
-                                .padding(horizontal = 6.dp, vertical = 1.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onToggleEpg) {
+                        Icon(Icons.AutoMirrored.Filled.FormatListBulleted, "EPG", tint = Color.White)
                     }
-                    val currentProgram = uiState.currentPrograms.find {
-                        val now = System.currentTimeMillis()
-                        it.startTime <= now && it.endTime >= now
-                    }
-                    Text(
-                        text = currentProgram?.title ?: "No Information Available",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text("Channel Guide", color = Color.White, style = MaterialTheme.typography.labelLarge)
                 }
-
-                Spacer(Modifier.width(12.dp))
-
-                Button(
-                    onClick = onToggleEpg,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null, tint = Color.White)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Mini Guide", color = Color.White)
-                }
-            }
-
-            // Scrub bar only appears when the current media reports a real
-            // duration — e.g. VOD / catchup. Live streams skip this.
-            if (isSeekable(player)) {
-                Spacer(Modifier.height(10.dp))
-                PlayerProgressBar(player = player)
+                
+                Text(
+                    text = "LIVE",
+                    color = BrandAccent,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .background(BrandAccent.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
     }
 }
 
 @Composable
-fun MiniEpgOverlay(programs: List<EpgProgram>) {
-    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-
-    Box(
+private fun MiniEpgOverlay(programs: List<com.iptv.player.data.model.EpgProgram>) {
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
-            .background(Color.Black.copy(alpha = 0.9f))
-            .padding(vertical = 16.dp)
+            .height(180.dp),
+        color = BrandNavyDeep.copy(alpha = 0.95f),
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     ) {
-        Column {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "UPCOMING PROGRAMS",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp)
+                "Up Next",
+                style = MaterialTheme.typography.titleMedium,
+                color = BrandAccent,
+                fontWeight = FontWeight.Bold
             )
-            
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(programs) { program ->
-                    Card(
-                        modifier = Modifier.width(220.dp).fillMaxHeight(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.1f)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "${timeFormat.format(Date(program.startTime))} - ${timeFormat.format(Date(program.endTime))}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BrandAccent
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = program.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = program.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.6f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                    MiniEpgItem(program)
                 }
             }
         }
@@ -457,34 +438,26 @@ fun MiniEpgOverlay(programs: List<EpgProgram>) {
 }
 
 @Composable
-fun ErrorOverlay(error: String, onRetry: () -> Unit, onBack: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.9f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Icon(Icons.Default.ErrorOutline, null, tint = BrandAccent, modifier = Modifier.size(64.dp))
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = error,
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedButton(onClick = onBack, border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp)) {
-                    Text("Go Back", color = Color.White)
-                }
-                Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = BrandAccent)) {
-                    Text("Retry", color = Color.Black)
-                }
-            }
-        }
+private fun MiniEpgItem(program: com.iptv.player.data.model.EpgProgram) {
+    Column(modifier = Modifier.width(200.dp)) {
+        Text(
+            program.title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            "${program.startTime} - ${program.endTime}",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.6f)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { 0.3f }, // Dummy progress
+            modifier = Modifier.fillMaxWidth(),
+            color = BrandAccent,
+            trackColor = Color.White.copy(alpha = 0.1f)
+        )
     }
 }
